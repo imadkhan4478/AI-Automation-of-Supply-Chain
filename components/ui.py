@@ -11,6 +11,19 @@ import pandas as pd
 from components import theme as T
 
 
+def _html_block(s):
+    """st.markdown(unsafe_allow_html=True) drops out of raw-HTML mode at the
+    first blank (or whitespace-only) line inside a multi-line HTML block —
+    everything after gets escaped and shown as literal text instead of
+    rendered. Conditional f-string fragments (e.g. an optional <p> that's
+    "" when there's nothing to show) leave exactly that kind of blank line,
+    so every multi-line HTML block in this file is routed through here to
+    strip them before they reach Streamlit.
+    """
+    st.markdown("\n".join(line for line in s.splitlines() if line.strip()),
+                unsafe_allow_html=True)
+
+
 # ======================================================================
 #  GLOBAL STYLES
 # ======================================================================
@@ -146,8 +159,7 @@ def inject_styles():
 def page_header(title, subtitle="", module="dashboard"):
     mod = T.MODULES.get(module, T.MODULES["dashboard"])
     icon_path = T.MODULE_ICONS.get(module, T.MODULE_ICONS["dashboard"])
-    st.markdown(
-        f"""
+    _html_block(f"""
         <div class="page-banner" style="background:{mod['gradient']};">
             <svg class="page-banner-icon" viewBox="0 0 24 24" fill="none" stroke="white"
                  stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">{icon_path}</svg>
@@ -156,9 +168,7 @@ def page_header(title, subtitle="", module="dashboard"):
                 {f'<p class="page-sub">{subtitle}</p>' if subtitle else ""}
             </div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        """)
 
 
 # ======================================================================
@@ -188,8 +198,7 @@ def kpi_card(label, value, delta=None, direction=None, good_when="down", sub="")
         tint, ink, icon = T.BRAND_SOFT, T.BRAND, _ICON_DOT
         delta_sub_html = f'<p class="kpi-sub">{delta}</p>' if delta else ""
     sub_html = f'<p class="kpi-sub">{sub}</p>' if sub else ""
-    st.markdown(
-        f"""
+    _html_block(f"""
         <div class="kpi" style="background:{tint};">
             <div class="kpi-top">
                 <div class="kpi-icon-chip" style="background:{ink};color:white;">{icon}</div>
@@ -199,9 +208,7 @@ def kpi_card(label, value, delta=None, direction=None, good_when="down", sub="")
             <p class="kpi-label" style="color:{ink};">{label}</p>
             {delta_sub_html}{sub_html}
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        """)
 
 
 # ======================================================================
@@ -329,8 +336,7 @@ def assistant_header():
     avatar = qadri_avatar_svg(46)
     mod = T.MODULES["assistant"]
     icon_path = T.MODULE_ICONS["assistant"]
-    st.markdown(
-        f"""
+    _html_block(f"""
         <div class="page-banner" style="background:{mod['gradient']}; padding:20px 28px;">
             <svg class="page-banner-icon" viewBox="0 0 24 24" fill="none" stroke="white"
                  stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">{icon_path}</svg>
@@ -349,6 +355,4 @@ def assistant_header():
                 </span>
             </div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        """)
