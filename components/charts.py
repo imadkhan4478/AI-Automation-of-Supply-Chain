@@ -21,7 +21,7 @@ def _apply_layout(fig, height=300, legend=False):
         font=dict(family=T.FONT_STACK, color=T.INK, size=13),
         showlegend=legend,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        hoverlabel=dict(bgcolor=T.NAVY, font_size=12, font_family=T.FONT_STACK),
+        hoverlabel=dict(bgcolor=T.BRAND_DEEP, font_size=12, font_family=T.FONT_STACK),
     )
     fig.update_xaxes(showgrid=False, showline=True, linecolor=T.LINE, tickfont=dict(color=T.MUTED))
     fig.update_yaxes(showgrid=True, gridcolor=T.CANVAS_ALT, zeroline=False, tickfont=dict(color=T.MUTED))
@@ -29,28 +29,40 @@ def _apply_layout(fig, height=300, legend=False):
 
 
 def trend_line(df, x, y, height=300):
-    """Smooth trend line with a soft fill — for values over time."""
+    """Smooth trend line with a brand-gradient fill — for values over time."""
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=df[x], y=df[y], mode="lines+markers",
-        line=dict(color=T.NAVY, width=3, shape="spline"),
-        marker=dict(size=7, color=T.GOLD, line=dict(color="white", width=1.5)),
-        fill="tozeroy", fillcolor="rgba(31,45,78,0.06)",
+        line=dict(color=T.BRAND, width=3, shape="spline"),
+        marker=dict(size=7, color=T.VIOLET, line=dict(color="white", width=1.5)),
+        fill="tozeroy",
+        fillgradient=dict(
+            type="vertical",
+            colorscale=[[0, "rgba(79,70,229,0.02)"], [1, "rgba(79,70,229,0.28)"]],
+        ),
         hovertemplate="%{x}<br><b>%{y}</b><extra></extra>",
     ))
     st.plotly_chart(_apply_layout(fig, height), width="stretch", config={"displayModeBar": False})
 
 
 def ranked_bar(df, cat, val, height=320, benchmark=None, invert_color=False):
-    """Horizontal ranked bar — for supplier performance, top items, etc."""
+    """Horizontal ranked bar — for supplier performance, top items, etc.
+
+    Default bars use a sequential brand-gradient (light -> deep indigo) keyed
+    to the bar's own value, so magnitude reads at a glance even without the
+    risk highlight. `invert_color` overrides this: the worst (highest) bar
+    turns risk-red and the rest fall back to a flat brand tone, since that
+    mode is about flagging one outlier, not showing a gradient of magnitude.
+    """
     d = df.sort_values(val, ascending=True)
-    colors = [T.NAVY] * len(d)
     if invert_color:  # worst (highest) gets risk color
         mx = d[val].max()
-        colors = [T.RISK if v == mx else T.NAVY for v in d[val]]
+        marker = dict(color=[T.RISK if v == mx else T.BRAND for v in d[val]])
+    else:
+        marker = dict(color=d[val], colorscale=[[0, T.BRAND_LIGHT], [1, T.BRAND_DEEP]])
     fig = go.Figure(go.Bar(
         x=d[val], y=d[cat], orientation="h",
-        marker=dict(color=colors),
+        marker=marker,
         hovertemplate="%{y}<br><b>%{x}</b><extra></extra>",
     ))
     if benchmark is not None:
@@ -60,10 +72,10 @@ def ranked_bar(df, cat, val, height=320, benchmark=None, invert_color=False):
 
 
 def category_bar(df, cat, val, height=300):
-    """Vertical bar for category comparison."""
+    """Vertical bar for category comparison, brand-gradient by magnitude."""
     fig = go.Figure(go.Bar(
         x=df[cat], y=df[val],
-        marker=dict(color=T.NAVY),
+        marker=dict(color=df[val], colorscale=[[0, T.BRAND_LIGHT], [1, T.BRAND_DEEP]]),
         hovertemplate="%{x}<br><b>%{y}</b><extra></extra>",
     ))
     st.plotly_chart(_apply_layout(fig, height), width="stretch", config={"displayModeBar": False})
@@ -75,7 +87,7 @@ def donut(labels, values, height=300):
     colors = []
     for lbl in labels:
         fg, _ = T.status_colors(lbl)
-        colors.append(fg if fg != T.INFO else T.NAVY)
+        colors.append(fg if fg != T.INFO else T.BRAND)
     fig = go.Figure(go.Pie(
         labels=labels, values=values, hole=0.62,
         marker=dict(colors=colors, line=dict(color="white", width=2)),
@@ -93,7 +105,7 @@ def aging_buckets(df, bucket_col, count_col, height=300):
     d = df.set_index(bucket_col).reindex(order).reset_index()
     fig = go.Figure(go.Bar(
         x=d[bucket_col], y=d[count_col],
-        marker=dict(color=[sev.get(b, T.NAVY) for b in d[bucket_col]]),
+        marker=dict(color=[sev.get(b, T.BRAND) for b in d[bucket_col]]),
         hovertemplate="%{x}<br><b>%{y}</b><extra></extra>",
     ))
     st.plotly_chart(_apply_layout(fig, height), width="stretch", config={"displayModeBar": False})

@@ -18,7 +18,7 @@ def inject_styles():
     st.markdown(
         f"""
         <style>
-            .stApp {{ background: {T.CANVAS}; }}
+            .stApp {{ background: {T.GRADIENT_CANVAS}; background-attachment: fixed; }}
             .block-container {{ padding-top: 2.4rem; padding-bottom: 2rem; max-width: 1400px;
                                 animation: fadeUp .5s ease; }}
 
@@ -42,7 +42,10 @@ def inject_styles():
                 max-width: 300px !important;
                 transform: none !important;
                 visibility: visible !important;
+                background: {T.GRADIENT_SIDEBAR} !important;
+                box-shadow: 4px 0 24px rgba(22,34,60,.18);
             }}
+            [data-testid="stSidebar"] > div {{ background: transparent; }}
 
             /* ---------- page load / element animations ---------- */
             @keyframes fadeUp {{
@@ -57,20 +60,26 @@ def inject_styles():
                 margin:0; letter-spacing:-0.01em;
             }}
             .page-sub {{ color:{T.MUTED}; font-size:0.95rem; margin:2px 0 0 0; }}
-            .head-rule {{ border:none; border-top:2px solid {T.GOLD};
+            .head-rule {{ border:none; height:3px; border-radius:3px;
+                          background:{T.GRADIENT_BRAND};
                           width:52px; margin:10px 0 20px 0; }}
 
-            /* ---------- KPI card (with 3D depth + hover lift) ---------- */
+            /* ---------- KPI card (gradient accent + colored glow) ---------- */
             .kpi {{
+                position:relative; overflow:hidden;
                 background:{T.SURFACE}; border:1px solid {T.LINE};
-                border-radius:12px; padding:16px 18px;
-                box-shadow:0 2px 6px rgba(31,45,78,.06), 0 1px 2px rgba(31,45,78,.04);
+                border-radius:16px; padding:18px 18px 16px 18px;
+                box-shadow:0 2px 10px rgba(79,70,229,.08), 0 1px 2px rgba(31,45,78,.04);
                 transition:transform .18s ease, box-shadow .18s ease;
                 height:100%;
             }}
+            .kpi::before {{
+                content:""; position:absolute; top:0; left:0; right:0; height:4px;
+                background:{T.GRADIENT_BRAND};
+            }}
             .kpi:hover {{
                 transform: translateY(-4px);
-                box-shadow:0 10px 24px rgba(31,45,78,.14), 0 3px 8px rgba(31,45,78,.08);
+                box-shadow:0 14px 28px rgba(79,70,229,.18), 0 3px 8px rgba(31,45,78,.08);
             }}
             .kpi-top {{ display:flex; justify-content:space-between; align-items:center; }}
             .kpi-label {{ color:{T.MUTED}; font-size:.74rem; font-weight:700;
@@ -96,22 +105,26 @@ def inject_styles():
                       font-size:.76rem; font-weight:650; }}
 
             /* ---------- health banner ---------- */
-            .health {{ border-radius:10px; padding:14px 18px; margin-bottom:6px;
+            .health {{ border-radius:12px; padding:14px 18px; margin-bottom:6px;
                        display:flex; align-items:center; gap:12px;
                        border:1px solid {T.LINE};
-                       box-shadow:0 2px 6px rgba(31,45,78,.05); }}
+                       box-shadow:0 2px 10px rgba(79,70,229,.06); }}
             .health-icon {{ font-size:1.4rem; font-weight:800; }}
             .health-text {{ font-size:1.0rem; font-weight:600; }}
 
             /* ---------- alert rows (hover slide) ---------- */
-            .alert {{ padding:11px 14px; border-radius:8px; margin-bottom:8px;
+            .alert {{ padding:11px 14px; border-radius:10px; margin-bottom:8px;
                       font-size:.9rem; border-left:4px solid; display:flex; gap:8px;
                       transition: transform .15s ease; }}
             .alert:hover {{ transform: translateX(3px); }}
 
             /* ---------- section label ---------- */
-            .section {{ color:{T.NAVY}; font-size:1.05rem; font-weight:700;
-                        margin:6px 0 10px 0; }}
+            .section {{ position:relative; color:{T.NAVY}; font-size:1.05rem; font-weight:700;
+                        margin:6px 0 10px 0; padding-left:12px; }}
+            .section::before {{
+                content:""; position:absolute; left:0; top:2px; bottom:2px; width:4px;
+                border-radius:3px; background:{T.GRADIENT_BRAND};
+            }}
 
             /* ---------- sidebar logo ---------- */
             .sidebar-logo {{ display:flex; justify-content:center; margin:4px 0 10px 0; }}

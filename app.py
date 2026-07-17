@@ -17,7 +17,7 @@ from streamlit_option_menu import option_menu
 
 from components import ui
 from components.ui import inject_styles
-from components.theme import NAVY, GOLD, NAVY_DEEP
+from components import theme as T
 
 # Page modules
 from pages_logic import (
@@ -54,8 +54,8 @@ PAGES = {
 with st.sidebar:
     ui.sidebar_logo()
     st.markdown(
-        f"<h2 style='color:{NAVY};margin-bottom:0;text-align:center;'>Qadri Group</h2>"
-        f"<p style='color:{GOLD};font-weight:600;margin-top:0;text-align:center;'>Supply Chain Intelligence</p>",
+        f"<h2 style='color:white;margin-bottom:0;text-align:center;'>Qadri Group</h2>"
+        f"<p style='color:{T.GOLD_SOFT};font-weight:600;margin-top:0;text-align:center;'>Supply Chain Intelligence</p>",
         unsafe_allow_html=True,
     )
     choice = option_menu(
@@ -65,15 +65,21 @@ with st.sidebar:
         default_index=0,
         styles={
             "container": {"padding": "0", "background-color": "transparent"},
-            "icon": {"color": GOLD, "font-size": "16px"},
+            "icon": {"color": T.GOLD, "font-size": "16px"},
             "nav-link": {
                 "font-size": "15px",
-                "color": NAVY,
+                "color": T.BRAND_LIGHT,
                 "text-align": "left",
-                "margin": "2px 0",
-                "--hover-color": "#EAEEF6",
+                "margin": "3px 0",
+                "border-radius": "10px",
+                "--hover-color": "rgba(255,255,255,.08)",
             },
-            "nav-link-selected": {"background-color": NAVY, "color": "white"},
+            "nav-link-selected": {
+                "background": T.GRADIENT_BRAND,
+                "color": "white",
+                "border-radius": "10px",
+                "box-shadow": "0 4px 12px rgba(79,70,229,.35)",
+            },
         },
     )
 
