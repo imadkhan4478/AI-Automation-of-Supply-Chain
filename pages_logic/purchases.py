@@ -7,7 +7,7 @@ from components import ui, charts
 
 
 def render():
-    ui.page_header("Purchases", "Track purchase orders, suppliers, and delivery status")
+    ui.page_header("Purchases", "Track purchase orders, suppliers, and delivery status", module="purchases")
 
     f1, f2 = st.columns(2)
     with f1:

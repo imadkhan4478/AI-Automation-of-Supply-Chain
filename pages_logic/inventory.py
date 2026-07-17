@@ -7,7 +7,7 @@ from components import ui, charts
 
 
 def render():
-    ui.page_header("Inventory", "Current stock levels and reorder risk across branches")
+    ui.page_header("Inventory", "Current stock levels and reorder risk across branches", module="inventory")
 
     status = st.selectbox("Show items", ["All", "Below reorder", "OK"])
     data = db.stock(status=status)

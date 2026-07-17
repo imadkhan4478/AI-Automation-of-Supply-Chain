@@ -15,7 +15,7 @@ from components import ui, charts
 
 
 def render():
-    ui.page_header("Logistics", "Export and import shipments, ports, and movements")
+    ui.page_header("Logistics", "Export and import shipments, ports, and movements", module="logistics")
 
     kind = st.selectbox("View", ["Export", "Import"])
     data = db.logistics(kind=kind)

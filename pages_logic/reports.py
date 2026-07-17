@@ -23,7 +23,7 @@ SOURCES = {
 
 
 def render():
-    ui.page_header("Reports", "Build a custom report from any columns, then export or visualize")
+    ui.page_header("Reports", "Build a custom report from any columns, then export or visualize", module="reports")
 
     # -------------------------------------------------- 1. Source
     ui.section("1 · Choose a data source")

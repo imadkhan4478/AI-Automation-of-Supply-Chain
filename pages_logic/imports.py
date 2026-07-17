@@ -7,7 +7,7 @@ from components import ui, charts
 
 
 def render():
-    ui.page_header("Imports", "Import shipments, values, and customs clearance")
+    ui.page_header("Imports", "Import shipments, values, and customs clearance", module="imports")
 
     status = st.selectbox("Show imports", db.imports_status_list())
     data = db.imports(status=status)

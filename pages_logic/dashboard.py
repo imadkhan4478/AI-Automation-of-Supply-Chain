@@ -13,7 +13,7 @@ from components import ui, charts
 
 
 def render():
-    ui.page_header("Executive Dashboard", "Supply chain performance at a glance")
+    ui.page_header("Executive Dashboard", "Supply chain performance at a glance", module="dashboard")
 
     # --- Health banner: the one-line answer ---
     h = db.health()

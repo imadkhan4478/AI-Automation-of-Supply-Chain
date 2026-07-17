@@ -53,42 +53,47 @@ def inject_styles():
                 to   {{ opacity: 1; transform: translateY(0); }}
             }}
 
-            /* ---------- page header ---------- */
-            .page-head {{ margin-bottom: 4px; }}
+            /* ---------- page header: full gradient banner + watermark icon ---------- */
+            .page-banner {{
+                position:relative; overflow:hidden; border-radius:20px;
+                padding:28px 32px; margin-bottom:24px;
+                box-shadow:0 12px 32px rgba(31,45,78,.20);
+                animation: fadeUp .5s ease;
+            }}
+            .page-banner-icon {{
+                position:absolute; right:-18px; top:50%; transform:translateY(-50%);
+                width:160px; height:160px; opacity:.15; pointer-events:none;
+            }}
+            .page-banner-text {{ position:relative; z-index:1; }}
             .page-title {{
-                color:{T.NAVY}; font-size:1.75rem; font-weight:700;
+                color:white; font-size:1.85rem; font-weight:750;
                 margin:0; letter-spacing:-0.01em;
             }}
-            .page-sub {{ color:{T.MUTED}; font-size:0.95rem; margin:2px 0 0 0; }}
-            .head-rule {{ border:none; height:3px; border-radius:3px;
-                          background:{T.GRADIENT_BRAND};
-                          width:52px; margin:10px 0 20px 0; }}
+            .page-sub {{ color:rgba(255,255,255,.88); font-size:0.95rem; margin:4px 0 0 0; }}
 
-            /* ---------- KPI card (gradient accent + colored glow) ---------- */
+            /* ---------- KPI card (semantic pastel tint + icon chip + trend pill) ---------- */
             .kpi {{
-                position:relative; overflow:hidden;
-                background:{T.SURFACE}; border:1px solid {T.LINE};
-                border-radius:16px; padding:18px 18px 16px 18px;
-                box-shadow:0 2px 10px rgba(79,70,229,.08), 0 1px 2px rgba(31,45,78,.04);
+                position:relative;
+                border-radius:18px; padding:18px;
+                box-shadow:0 4px 14px rgba(31,45,78,.08);
                 transition:transform .18s ease, box-shadow .18s ease;
                 height:100%;
             }}
-            .kpi::before {{
-                content:""; position:absolute; top:0; left:0; right:0; height:4px;
-                background:{T.GRADIENT_BRAND};
-            }}
             .kpi:hover {{
                 transform: translateY(-4px);
-                box-shadow:0 14px 28px rgba(79,70,229,.18), 0 3px 8px rgba(31,45,78,.08);
+                box-shadow:0 14px 30px rgba(31,45,78,.16);
             }}
-            .kpi-top {{ display:flex; justify-content:space-between; align-items:center; }}
-            .kpi-label {{ color:{T.MUTED}; font-size:.74rem; font-weight:700;
-                          text-transform:uppercase; letter-spacing:.05em; margin:0; }}
-            .kpi-dot {{ width:8px; height:8px; border-radius:50%; }}
+            .kpi-top {{ display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }}
+            .kpi-icon-chip {{
+                width:38px; height:38px; border-radius:12px; flex:none;
+                display:flex; align-items:center; justify-content:center;
+            }}
+            .kpi-icon-chip svg {{ width:19px; height:19px; }}
+            .kpi-pill {{ font-size:.72rem; font-weight:700; padding:3px 10px; border-radius:20px; }}
+            .kpi-label {{ font-size:.78rem; font-weight:650; margin:0; }}
             .kpi-value {{ color:{T.NAVY}; font-size:1.9rem; font-weight:750;
-                          margin:6px 0 0 0; line-height:1.05; }}
-            .kpi-delta {{ font-size:.82rem; font-weight:650; margin:4px 0 0 0; }}
-            .kpi-sub {{ color:{T.MUTED}; font-size:.76rem; margin:1px 0 0 0; }}
+                          margin:4px 0 0 0; line-height:1.05; }}
+            .kpi-sub {{ color:{T.MUTED}; font-size:.76rem; margin:4px 0 0 0; }}
 
             /* ---------- buttons: subtle transition + lift ---------- */
             .stButton > button, .stDownloadButton > button {{
@@ -136,41 +141,63 @@ def inject_styles():
 
 
 # ======================================================================
-#  HEADER
+#  HEADER  (full gradient banner, distinct per module)
 # ======================================================================
-def page_header(title, subtitle=""):
+def page_header(title, subtitle="", module="dashboard"):
+    mod = T.MODULES.get(module, T.MODULES["dashboard"])
+    icon_path = T.MODULE_ICONS.get(module, T.MODULE_ICONS["dashboard"])
     st.markdown(
-        f'<div class="page-head"><p class="page-title">{title}</p>'
-        + (f'<p class="page-sub">{subtitle}</p>' if subtitle else "")
-        + '</div><hr class="head-rule">',
+        f"""
+        <div class="page-banner" style="background:{mod['gradient']};">
+            <svg class="page-banner-icon" viewBox="0 0 24 24" fill="none" stroke="white"
+                 stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">{icon_path}</svg>
+            <div class="page-banner-text">
+                <p class="page-title">{title}</p>
+                {f'<p class="page-sub">{subtitle}</p>' if subtitle else ""}
+            </div>
+        </div>
+        """,
         unsafe_allow_html=True,
     )
 
 
 # ======================================================================
-#  KPI CARD  (with trend + direction)
+#  KPI CARD  (semantic pastel tint + icon chip + trend pill)
 # ======================================================================
+_ICON_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+_ICON_ALERT = ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" '
+               'stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/>'
+               '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>')
+_ICON_DOT = '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg>'
+
+
 def kpi_card(label, value, delta=None, direction=None, good_when="down", sub=""):
-    dot = T.MUTED
-    delta_html = ""
+    """A KPI card whose background tint reflects whether the number is
+    actually good or bad — same R/A/G discipline as everywhere else in the
+    app, just applied to the whole card instead of a small dot, so it reads
+    at a glance the way the reference dashboards do.
+    """
+    pill_html = ""
     if direction in ("up", "down"):
         is_good = (direction == good_when)
-        color = T.HEALTHY if is_good else T.RISK
-        dot = color
+        tint, ink, icon = (T.HEALTHY_BG, T.HEALTHY, _ICON_CHECK) if is_good else (T.RISK_BG, T.RISK, _ICON_ALERT)
         arrow = "▲" if direction == "up" else "▼"
-        delta_html = f'<p class="kpi-delta" style="color:{color}">{arrow} {delta}</p>'
-    elif delta:
-        delta_html = f'<p class="kpi-sub">{delta}</p>'
+        pill_html = f'<span class="kpi-pill" style="background:rgba(255,255,255,.65);color:{ink};">{arrow} {delta}</span>'
+        delta_sub_html = ""
+    else:
+        tint, ink, icon = T.BRAND_SOFT, T.BRAND, _ICON_DOT
+        delta_sub_html = f'<p class="kpi-sub">{delta}</p>' if delta else ""
     sub_html = f'<p class="kpi-sub">{sub}</p>' if sub else ""
     st.markdown(
         f"""
-        <div class="kpi">
+        <div class="kpi" style="background:{tint};">
             <div class="kpi-top">
-                <p class="kpi-label">{label}</p>
-                <span class="kpi-dot" style="background:{dot}"></span>
+                <div class="kpi-icon-chip" style="background:{ink};color:white;">{icon}</div>
+                {pill_html}
             </div>
             <p class="kpi-value">{value}</p>
-            {delta_html}{sub_html}
+            <p class="kpi-label" style="color:{ink};">{label}</p>
+            {delta_sub_html}{sub_html}
         </div>
         """,
         unsafe_allow_html=True,
@@ -295,27 +322,33 @@ def sidebar_logo():
 
 
 def assistant_header():
-    """Branded header block for the assistant page."""
+    """Branded header block for the assistant page — same gradient-banner
+    system as every other page (module="assistant"), with the avatar and
+    the online badge laid over it.
+    """
     avatar = qadri_avatar_svg(46)
+    mod = T.MODULES["assistant"]
+    icon_path = T.MODULE_ICONS["assistant"]
     st.markdown(
         f"""
-        <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px;">
-            <img src="{avatar}" width="46" height="46"
-                 style="border-radius:10px;filter:drop-shadow(0 2px 5px rgba(0,0,0,.2));"/>
-            <div>
-                <p style="color:{T.NAVY};font-size:1.5rem;font-weight:750;margin:0;line-height:1.1;">
-                    {ASSISTANT_NAME}</p>
-                <p style="color:{T.MUTED};font-size:0.9rem;margin:2px 0 0 0;">
-                    Your Qadri Group supply chain assistant</p>
+        <div class="page-banner" style="background:{mod['gradient']}; padding:20px 28px;">
+            <svg class="page-banner-icon" viewBox="0 0 24 24" fill="none" stroke="white"
+                 stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">{icon_path}</svg>
+            <div class="page-banner-text" style="display:flex;align-items:center;gap:14px;">
+                <img src="{avatar}" width="46" height="46"
+                     style="border-radius:10px;filter:drop-shadow(0 2px 5px rgba(0,0,0,.25));"/>
+                <div>
+                    <p class="page-title" style="font-size:1.5rem;line-height:1.1;">{ASSISTANT_NAME}</p>
+                    <p class="page-sub">Your Qadri Group supply chain assistant</p>
+                </div>
+                <span style="margin-left:auto;display:flex;align-items:center;gap:6px;
+                             background:rgba(255,255,255,.25);color:white;padding:5px 12px;
+                             border-radius:20px;font-size:0.8rem;font-weight:650;">
+                    <span style="width:8px;height:8px;border-radius:50%;background:#4ADE80;
+                                 display:inline-block;"></span> Online
+                </span>
             </div>
-            <span style="margin-left:auto;display:flex;align-items:center;gap:6px;
-                         background:{T.HEALTHY_BG};color:{T.HEALTHY};padding:5px 12px;
-                         border-radius:20px;font-size:0.8rem;font-weight:650;">
-                <span style="width:8px;height:8px;border-radius:50%;background:{T.HEALTHY};
-                             display:inline-block;"></span> Online
-            </span>
         </div>
-        <hr class="head-rule">
         """,
         unsafe_allow_html=True,
     )
