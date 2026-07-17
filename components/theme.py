@@ -43,20 +43,34 @@ CHART_SEQUENCE = [NAVY, GOLD, "#4A6FA5", "#8C6D1F", "#7089B0", "#C7A93E"]
 FONT_STACK = "'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif"
 
 # --- Status lookup helper ---
+# NOTE: the "arrived" = healthy, "in process/awaiting/under" = watch,
+# "cancelled" = risk grouping below for import_details.current_status is a
+# placeholder business rule (same spirit as the delay/reorder rules in
+# backend/data_access.py) until the business confirms real terminal states.
 STATUS_MAP = {
     # purchases / imports / general
-    "delayed":            (RISK, RISK_BG),
-    "pending clearance":  (RISK, RISK_BG),
-    "below reorder":      (RISK, RISK_BG),
-    "critical":           (RISK, RISK_BG),
-    "pending":            (WATCH, WATCH_BG),
-    "in transit":         (WATCH, WATCH_BG),
-    "watch":              (WATCH, WATCH_BG),
-    "completed":          (HEALTHY, HEALTHY_BG),
-    "cleared":            (HEALTHY, HEALTHY_BG),
-    "ok":                 (HEALTHY, HEALTHY_BG),
-    "delivered":          (HEALTHY, HEALTHY_BG),
-    "healthy":            (HEALTHY, HEALTHY_BG),
+    "delayed":                 (RISK, RISK_BG),
+    "pending clearance":       (RISK, RISK_BG),
+    "below reorder":           (RISK, RISK_BG),
+    "critical":                (RISK, RISK_BG),
+    "order cancelled":         (RISK, RISK_BG),
+    "pending":                 (WATCH, WATCH_BG),
+    "in transit":              (WATCH, WATCH_BG),
+    "watch":                   (WATCH, WATCH_BG),
+    "under production":        (WATCH, WATCH_BG),
+    "ready awaiting sailing":  (WATCH, WATCH_BG),
+    "under custom clearance":  (WATCH, WATCH_BG),
+    "costing in process":      (WATCH, WATCH_BG),
+    "lc in process":           (WATCH, WATCH_BG),
+    "t/t in process":          (WATCH, WATCH_BG),
+    "under de-stuffing":       (WATCH, WATCH_BG),
+    "completed":               (HEALTHY, HEALTHY_BG),
+    "cleared":                 (HEALTHY, HEALTHY_BG),
+    "ok":                      (HEALTHY, HEALTHY_BG),
+    "delivered":               (HEALTHY, HEALTHY_BG),
+    "healthy":                 (HEALTHY, HEALTHY_BG),
+    "arrived at works":        (HEALTHY, HEALTHY_BG),
+    "arrived at qfl":          (HEALTHY, HEALTHY_BG),
 }
 
 
