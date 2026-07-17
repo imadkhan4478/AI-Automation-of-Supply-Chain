@@ -28,8 +28,8 @@ def render():
         pv = k["purchase_value"]
         ui.kpi_card("Purchase Value", ui.money(pv["value"]), pv["delta"], pv["direction"], pv["good_when"])
     with r1[1]:
-        po = k["pending_orders"]
-        ui.kpi_card("Pending Orders", f"{po['value']:,}", po["delta"], po["direction"], po["good_when"])
+        ct = k["avg_cycle_time"]
+        ui.kpi_card("Avg Cycle Time", ct["value"], ct["delta"], ct["direction"], ct["good_when"])
     with r1[2]:
         do = k["delayed_orders"]
         ui.kpi_card("Delayed Orders", f"{do['value']:,}", do["delta"], do["direction"], do["good_when"])
@@ -73,5 +73,5 @@ def render():
         labels, values = db.status_split("purchases")
         charts.donut(labels, values, height=300)
     with c3:
-        ui.section("Pending Order Aging")
+        ui.section("Delayed Orders — Days Overdue")
         charts.aging_buckets(db.aging(), "bucket", "orders", height=300)

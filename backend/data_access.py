@@ -27,11 +27,66 @@ def dashboard_kpis():
 
 
 def purchase_trend():
-    return _src.get_purchase_trend()
+    """Real monthly purchase value (PKR millions) from purchases_data.
+
+    NOTE: the current extract only spans ~2 months (see purchases.purchase
+    min/max), so this may show as few as 2 points until more history
+    accumulates in the database. That's the real data, not a bug.
+    """
+    query = text("""
+        SELECT
+            TO_CHAR(DATE_TRUNC('month', purchase), 'Mon YYYY') AS month,
+            SUM(amount) / 1e6 AS purchase_value_m
+        FROM public.purchases_data
+        WHERE purchase IS NOT NULL
+        GROUP BY DATE_TRUNC('month', purchase)
+        ORDER BY DATE_TRUNC('month', purchase)
+    """)
+    return pd.read_sql(query, get_engine())
 
 
 def alerts():
-    return _src.get_alerts()
+    """Real attention panel, derived from suppliers / stock / purchases / imports.
+
+    NOTE: 'chronically late' (on-time < 70%) and 'stuck import' (past its
+    required date, still open) are placeholder business rules, same spirit
+    as the delay/reorder rules elsewhere in this module — swap the
+    threshold once the business defines a real one.
+    """
+    engine = get_engine()
+    out = []
+
+    sup = supplier_performance()
+    late = sup[sup["on_time_pct"] < 70].sort_values("on_time_pct")
+    if len(late):
+        names = ", ".join(late["supplier"].head(3))
+        out.append({"level": "high", "message": f"{len(late)} supplier(s) chronically late (on-time < 70%): {names}"})
+
+    stock_df = stock()
+    n_risk = int((stock_df["stock_status"] == "Below reorder").sum())
+    if n_risk:
+        out.append({"level": "high", "message": f"{n_risk} items below reorder point"})
+
+    this_month = pd.read_sql(text("""
+        SELECT COUNT(*) AS n
+        FROM public.purchases_data
+        WHERE required_d IS NOT NULL AND purchase > required_d
+          AND DATE_TRUNC('month', purchase) = (SELECT MAX(DATE_TRUNC('month', purchase)) FROM public.purchases_data)
+    """), engine)
+    n_delayed = int(this_month.iloc[0]["n"])
+    if n_delayed:
+        out.append({"level": "medium", "message": f"{n_delayed} purchase orders delayed this month"})
+
+    stuck_imports = pd.read_sql(text("""
+        SELECT COUNT(*) AS n FROM public.import_details
+        WHERE current_status NOT IN ('Arrived at Works', 'Order Cancelled')
+          AND req_date IS NOT NULL AND req_date < CURRENT_DATE
+    """), engine)
+    n_stuck = int(stuck_imports.iloc[0]["n"])
+    if n_stuck:
+        out.append({"level": "low", "message": f"{n_stuck} imports past their required date, still open"})
+
+    return out
 
 
 # --- Purchases -------------------------------------------------------
@@ -256,15 +311,159 @@ def ask_assistant(question):
 
 # --- Executive / enriched (added for enterprise dashboard) -----------
 def dashboard_kpis_rich():
-    return _src.get_dashboard_kpis_rich()
+    """Real KPI cards for the executive dashboard: this calendar month vs last.
+
+    NOTE: purchases_data has zero rows with `purchase IS NULL` in the
+    current extract -- every order already has a completion date, so there
+    is no real "open/pending order" population. The old "Pending Orders"
+    card is relabeled to Avg Cycle Time (days from ppc_store to purchase),
+    a metric the data can actually prove; the key changed from
+    `pending_orders` to `avg_cycle_time` to match (see dashboard.py).
+
+    `items_at_risk` (stock) and `open_imports` (import_details) are
+    point-in-time snapshots -- there's no history table to diff against --
+    so their deltas honestly say "current snapshot" instead of an invented
+    month-over-month change.
+
+    Comparing a full prior month to a partial current month (if the current
+    month is still in progress) will show a real dip in raw totals; this is
+    not corrected/prorated, since that would be inventing data.
+    """
+    engine = get_engine()
+
+    scoped = pd.read_sql(text("""
+        WITH scoped AS (
+            SELECT
+                amount,
+                (purchase - ppc_store) AS cycle_days,
+                CASE WHEN required_d IS NOT NULL AND purchase > required_d
+                     THEN 'Delayed' ELSE 'Completed' END AS status,
+                DATE_TRUNC('month', purchase) AS month
+            FROM public.purchases_data
+            WHERE purchase IS NOT NULL
+        ),
+        recent_months AS (
+            SELECT DISTINCT month FROM scoped ORDER BY month DESC LIMIT 2
+        )
+        SELECT
+            month,
+            COUNT(*) AS total,
+            SUM(amount) AS purchase_value,
+            SUM(CASE WHEN status = 'Delayed' THEN 1 ELSE 0 END) AS delayed,
+            AVG(cycle_days) AS avg_cycle_days
+        FROM scoped
+        WHERE month IN (SELECT month FROM recent_months)
+        GROUP BY month
+        ORDER BY month DESC
+    """), engine)
+
+    def _row(i):
+        return scoped.iloc[i] if len(scoped) > i else None
+
+    cur, prev = _row(0), _row(1)
+
+    def _pct_delta(cur_val, prev_val):
+        if prev is None or not prev_val:
+            return None
+        return (cur_val - prev_val) / prev_val * 100
+
+    def _dir(delta):
+        return None if delta is None else ("up" if delta >= 0 else "down")
+
+    def _fmt(delta):
+        return "no prior month to compare" if delta is None else f"{abs(delta):.0f}% vs last month"
+
+    cur_on_time = (cur["total"] - cur["delayed"]) / cur["total"] * 100 if cur["total"] else 0
+    prev_on_time = ((prev["total"] - prev["delayed"]) / prev["total"] * 100) if (prev is not None and prev["total"]) else None
+
+    value_delta = _pct_delta(cur["purchase_value"], prev["purchase_value"] if prev is not None else None)
+    delayed_delta = _pct_delta(cur["delayed"], prev["delayed"] if prev is not None else None)
+    cycle_delta = _pct_delta(cur["avg_cycle_days"], prev["avg_cycle_days"] if prev is not None else None)
+    on_time_delta = _pct_delta(cur_on_time, prev_on_time)
+
+    # items_at_risk: reuses the already-connected stock() query.
+    stock_df = stock()
+    at_risk = int((stock_df["stock_status"] == "Below reorder").sum())
+
+    # open_imports: business-rule placeholder -- terminal states are
+    # 'Arrived at Works' and 'Order Cancelled'; everything else is open.
+    imp = pd.read_sql(text("""
+        SELECT COUNT(*) AS n FROM public.import_details
+        WHERE current_status NOT IN ('Arrived at Works', 'Order Cancelled')
+    """), engine)
+    open_n = int(imp.iloc[0]["n"])
+
+    return {
+        "purchase_value": {
+            "value": float(cur["purchase_value"]), "delta": _fmt(value_delta),
+            "direction": _dir(value_delta), "good_when": "up",
+        },
+        "avg_cycle_time": {
+            "value": f"{cur['avg_cycle_days']:.1f} days", "delta": _fmt(cycle_delta),
+            "direction": _dir(cycle_delta), "good_when": "down",
+        },
+        "delayed_orders": {
+            "value": int(cur["delayed"]), "delta": _fmt(delayed_delta),
+            "direction": _dir(delayed_delta), "good_when": "down",
+        },
+        "on_time_rate": {
+            "value": f"{cur_on_time:.0f}%", "delta": _fmt(on_time_delta),
+            "direction": _dir(on_time_delta), "good_when": "up",
+        },
+        "items_at_risk": {
+            "value": at_risk, "delta": "current snapshot", "direction": None, "good_when": "down",
+        },
+        "open_imports": {
+            "value": open_n, "delta": "current snapshot", "direction": None, "good_when": "down",
+        },
+    }
 
 
 def health():
-    return _src.get_health()
+    """Real health banner, derived from this (most recent) month's delayed rate.
+
+    NOTE: thresholds are a placeholder business rule (same spirit as the
+    delay/reorder rules elsewhere in this module) until the business
+    defines real SLA bands: <15% delayed = healthy, 15-30% = watch, else risk.
+    """
+    df = pd.read_sql(text("""
+        SELECT
+            COUNT(*) AS total,
+            SUM(CASE WHEN required_d IS NOT NULL AND purchase > required_d THEN 1 ELSE 0 END) AS delayed
+        FROM public.purchases_data
+        WHERE purchase IS NOT NULL
+          AND DATE_TRUNC('month', purchase) = (SELECT MAX(DATE_TRUNC('month', purchase)) FROM public.purchases_data WHERE purchase IS NOT NULL)
+    """), get_engine())
+    total, delayed = int(df.iloc[0]["total"]), int(df.iloc[0]["delayed"])
+    rate = delayed / total * 100 if total else 0
+
+    if rate < 15:
+        return {"level": "healthy", "message": f"Supply chain healthy — {delayed} delayed orders this month ({rate:.0f}%)"}
+    if rate < 30:
+        return {"level": "watch", "message": f"Supply chain stable — {delayed} delayed orders this month ({rate:.0f}%) need attention"}
+    return {"level": "risk", "message": f"Supply chain at risk — {delayed} delayed orders this month ({rate:.0f}%)"}
 
 
 def supplier_performance():
-    return _src.get_supplier_performance()
+    """Real on-time % per supplier, top suppliers by order volume.
+
+    NOTE: limited to suppliers with >=5 orders and the top 8 by volume, so
+    a single-order supplier can't show a misleading 0%/100%. Adjust the
+    threshold once the business defines a minimum sample size.
+    """
+    query = text("""
+        SELECT
+            supplier,
+            100.0 * SUM(CASE WHEN required_d IS NOT NULL AND purchase > required_d
+                              THEN 0 ELSE 1 END) / COUNT(*) AS on_time_pct
+        FROM public.purchases_data
+        WHERE supplier IS NOT NULL AND supplier <> ''
+        GROUP BY supplier
+        HAVING COUNT(*) >= 5
+        ORDER BY COUNT(*) DESC
+        LIMIT 8
+    """)
+    return pd.read_sql(query, get_engine())
 
 
 def status_split(kind="purchases"):
@@ -305,4 +504,27 @@ def status_split(kind="purchases"):
 
 
 def aging():
-    return _src.get_aging()
+    """Real 'days late' distribution for delayed purchase orders.
+
+    NOTE: purchases_data has zero rows with `purchase IS NULL` in the
+    current extract, so there's no real "pending order" population to age
+    (see dashboard_kpis_rich NOTE). This chart is repurposed to show how
+    late the *delayed* orders were, reusing the aging_buckets component's
+    existing bucket boundaries/severity colors (0-30/31-60/61-90/90+ days)
+    unchanged -- only the meaning (pending age -> days overdue) changes.
+    See dashboard.py's section header for the matching relabel.
+    """
+    query = text("""
+        SELECT
+            CASE
+                WHEN (purchase - required_d) <= 30 THEN '0-30 days'
+                WHEN (purchase - required_d) <= 60 THEN '31-60 days'
+                WHEN (purchase - required_d) <= 90 THEN '61-90 days'
+                ELSE '90+ days'
+            END AS bucket,
+            COUNT(*) AS orders
+        FROM public.purchases_data
+        WHERE required_d IS NOT NULL AND purchase > required_d
+        GROUP BY bucket
+    """)
+    return pd.read_sql(query, get_engine())
