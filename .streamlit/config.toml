@@ -1,0 +1,11 @@
+[theme]
+primaryColor = "#BF9000"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F4F6FA"
+textColor = "#1F2D4E"
+font = "sans serif"
+
+[server]
+# Bind to all interfaces so other machines on the office LAN can reach it.
+# (In production run with: streamlit run app.py --server.address 0.0.0.0)
+headless = true
