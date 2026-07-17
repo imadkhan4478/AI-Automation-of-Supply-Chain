@@ -9,7 +9,7 @@ from components import ui, charts
 def render():
     ui.page_header("Imports", "Import shipments, values, and customs clearance")
 
-    status = st.selectbox("Show imports", ["All", "In Transit", "Cleared", "Pending Clearance"])
+    status = st.selectbox("Show imports", db.imports_status_list())
     data = db.imports(status=status)
 
     c1, c2, c3 = st.columns(3)
@@ -19,8 +19,8 @@ def render():
         total = int(data["total_value_pkr"].sum()) if len(data) else 0
         ui.kpi_card("Total Value", ui.money(total))
     with c3:
-        pending = int((data["current_status"] == "Pending Clearance").sum()) if len(data) else 0
-        ui.kpi_card("Pending Clearance", f"{pending}", direction="up" if pending else None,
+        pending = int((data["current_status"] == "Under Custom Clearance").sum()) if len(data) else 0
+        ui.kpi_card("Under Clearance", f"{pending}", direction="up" if pending else None,
                     good_when="down", delta="awaiting customs" if pending else "")
 
     st.write("")

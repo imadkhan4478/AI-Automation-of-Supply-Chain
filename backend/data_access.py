@@ -125,13 +125,129 @@ def stock(status="All"):
 
 # --- Imports ---------------------------------------------------------
 def imports(status="All"):
-    return _src.get_imports(status=status)
+    """Real data: import shipments from import_details.
+
+    `current_status` is the real workflow state (10 distinct business values
+    such as 'Arrived at Works', 'In Transit', 'Under Custom Clearance').
+    No join needed — customer/supplier/value all live on this table.
+
+    NOTE: total_value_pkr is often 0 in the source (value is recorded in
+    total_value_fc / foreign currency); both are returned so the page/team
+    can decide which to display once an FX rule is provided.
+    """
+    query = text("""
+        SELECT
+            import_ref,
+            branch,
+            customer,
+            supplier,
+            supplier_country,
+            category,
+            total_wt_ton,
+            total_value_fc,
+            total_value_pkr,
+            demand_date,
+            req_date,
+            gin_date,
+            docs_status,
+            current_status
+        FROM public.import_details
+        ORDER BY import_id
+    """)
+    df = pd.read_sql(query, get_engine())
+
+    if status != "All":
+        df = df[df["current_status"] == status].reset_index(drop=True)
+    return df
+
+
+def imports_status_list():
+    """Real distinct current_status values, most common first."""
+    query = text("""
+        SELECT current_status
+        FROM public.import_details
+        WHERE current_status IS NOT NULL AND current_status <> ''
+        GROUP BY current_status
+        ORDER BY COUNT(*) DESC
+    """)
+    df = pd.read_sql(query, get_engine())
+    return ["All"] + df["current_status"].tolist()
+
 
 
 # --- Logistics -------------------------------------------------------
 def logistics(kind="Export"):
-    return _src.get_logistics(kind=kind)
-
+    """Real data: export shipments (public.exports) or import shipments
+    (public.shipment_details), depending on `kind`.
+ 
+    Both branches return a DataFrame with a derived `status` column so the
+    Logistics page can colour-code rows the same way for either view.
+ 
+    Status rules are PLACEHOLDERS (like stock's reorder rule) until the
+    business confirms real definitions:
+      - Export : 'Completed' when handed_over_to is filled, else 'Pending'.
+      - Import : 'Cleared' when gate_out is set, else 'In Transit' when an
+                 eta_final exists, else 'Pending Clearance'.
+ 
+    Note: richer logistics metrics (transit days, cost/kg, packing on-time,
+    documentation completion %) are available later from the pre-built views
+    v_shipment_metrics / v_packing_metrics / v_shifting_metrics /
+    v_documentation_completion — wire those in during customization.
+    """
+    engine = get_engine()
+ 
+    if kind == "Import":
+        query = text("""
+            SELECT
+                bl_no,
+                pol,
+                pod,
+                mode_of_shipment,
+                s_line,
+                local_agent,
+                total_value_pkr_batch_wise,
+                etd,
+                eta_final,
+                transit_time,
+                gate_out,
+                clearance_mode
+            FROM public.shipment_details
+            ORDER BY eta_final DESC NULLS LAST
+        """)
+        df = pd.read_sql(query, engine)
+ 
+        def _imp_status(row):
+            if pd.notna(row["gate_out"]):
+                return "Cleared"
+            if pd.notna(row["eta_final"]):
+                return "In Transit"
+            return "Pending Clearance"
+ 
+        df["status"] = df.apply(_imp_status, axis=1) if len(df) else []
+        return df
+ 
+    # Default: Export
+    query = text("""
+        SELECT
+            exp_no,
+            customer,
+            shipping_agent,
+            bl_type,
+            payment_term,
+            sailing_date,
+            gate_out_date,
+            handed_over_to
+        FROM public.exports
+        ORDER BY sailing_date DESC NULLS LAST
+    """)
+    df = pd.read_sql(query, engine)
+    df["status"] = (
+        df["handed_over_to"].apply(
+            lambda v: "Completed" if pd.notna(v) and str(v).strip() != "" else "Pending"
+        )
+        if len(df) else []
+    )
+    return df
 
 # --- Assistant -------------------------------------------------------
 def ask_assistant(question):
@@ -152,6 +268,39 @@ def supplier_performance():
 
 
 def status_split(kind="purchases"):
+    """Real composition for donut charts (imports & purchases).
+
+    Uses the same derived/real status the tables use, so the donut always
+    matches the table above it. Other kinds still fall back to stub.
+    """
+    if kind == "imports":
+        query = text("""
+            SELECT current_status AS label, COUNT(*) AS n
+            FROM public.import_details
+            WHERE current_status IS NOT NULL AND current_status <> ''
+            GROUP BY current_status
+            ORDER BY n DESC
+        """)
+        df = pd.read_sql(query, get_engine())
+        return df["label"].tolist(), df["n"].tolist()
+
+    if kind == "purchases":
+        query = text("""
+            SELECT
+                CASE
+                    WHEN purchase IS NULL THEN 'Pending'
+                    WHEN required_d IS NOT NULL
+                         AND purchase > required_d THEN 'Delayed'
+                    ELSE 'Completed'
+                END AS label,
+                COUNT(*) AS n
+            FROM public.purchases_data
+            GROUP BY label
+            ORDER BY n DESC
+        """)
+        df = pd.read_sql(query, get_engine())
+        return df["label"].tolist(), df["n"].tolist()
+
     return _src.get_status_split(kind=kind)
 
 
