@@ -174,11 +174,15 @@ def inject_styles():
             .st-key-chat_fab {{
                 position:fixed; bottom:28px; right:32px; z-index:999; width:auto;
             }}
-            /* The trigger is data-testid="stPopoverButton" wrapping its own
-               <button> -- not a direct child of [data-testid="stPopover"] --
-               so a "> button" combinator never matched it and it fell back
-               to Streamlit's plain (theme-following-nothing) secondary
-               button style, showing as a stray white pill in dark mode. */
+            /* data-testid="stPopoverButton" is set directly on the trigger's
+               <button> element (not a wrapping div around a nested button,
+               which the previous "[data-testid=stPopoverButton] button"
+               selector assumed) -- so that rule never matched anything and
+               the trigger fell back to Streamlit's plain secondary-button
+               style, showing as a white pill that only got a faint tint on
+               Streamlit's own default hover. Matching both possible shapes
+               here so this keeps working regardless of the exact DOM. */
+            .st-key-chat_fab [data-testid="stPopoverButton"],
             .st-key-chat_fab [data-testid="stPopoverButton"] button {{
                 background:{T.GRADIENT_BRAND} !important; color:white !important;
                 border:none !important; border-radius:999px !important;
@@ -186,6 +190,7 @@ def inject_styles():
                 box-shadow:0 8px 24px rgba(79,70,229,.4) !important;
                 transition: transform .15s ease, box-shadow .15s ease;
             }}
+            .st-key-chat_fab [data-testid="stPopoverButton"]:hover,
             .st-key-chat_fab [data-testid="stPopoverButton"] button:hover {{
                 transform: translateY(-2px);
                 box-shadow:0 12px 30px rgba(79,70,229,.5) !important;

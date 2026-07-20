@@ -88,7 +88,16 @@ def category_bar(df, cat, val, height=300):
 
 
 def donut(labels, values, height=300):
-    """Donut for composition (status split, stock health)."""
+    """Donut for composition (status split, stock health).
+
+    Labels sit outside the ring (not curved along thin slice arcs) -- with
+    more than a handful of categories, Plotly's default "inside" placement
+    rotates each label to follow its own slice, and on thin slices that
+    means overlapping/truncated text (e.g. "Ready Awaiting Sailing" reading
+    as "aiting Sailing" crossed with the next slice's label). `automargin`
+    lets Plotly grow the figure's own margins to fit the outside labels
+    instead of clipping them.
+    """
     # map status-like labels to semantic colors where possible
     colors = []
     for lbl in labels:
@@ -97,10 +106,13 @@ def donut(labels, values, height=300):
     fig = go.Figure(go.Pie(
         labels=labels, values=values, hole=0.62,
         marker=dict(colors=colors, line=dict(color=T.CANVAS, width=2)),
-        textinfo="label+percent", textfont=dict(size=12),
+        textinfo="label+percent", textposition="outside", automargin=True,
+        textfont=dict(size=11),
         hovertemplate="%{label}<br><b>%{value}</b> (%{percent})<extra></extra>",
     ))
-    st.plotly_chart(_apply_layout(fig, height, legend=False), width="stretch", config={"displayModeBar": False})
+    fig = _apply_layout(fig, height, legend=False)
+    fig.update_layout(margin=dict(l=50, r=50, t=30, b=30))
+    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
 
 def aging_buckets(df, bucket_col, count_col, height=300):
