@@ -20,11 +20,17 @@ def _apply_layout(fig, height=300, legend=False):
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family=T.FONT_STACK, color=T.INK, size=13),
         showlegend=legend,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        hoverlabel=dict(bgcolor=T.BRAND_DEEP, font_size=12, font_family=T.FONT_STACK),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(color=T.MUTED)),
+        # bgcolor here is a fixed brand color (not mode-dependent, see theme.py),
+        # so the hover font color is pinned to white rather than left to
+        # Plotly's default -- which doesn't auto-contrast against a dark chip.
+        hoverlabel=dict(bgcolor=T.BRAND_DEEP, font=dict(color="white", size=12, family=T.FONT_STACK)),
     )
     fig.update_xaxes(showgrid=False, showline=True, linecolor=T.LINE, tickfont=dict(color=T.MUTED))
-    fig.update_yaxes(showgrid=True, gridcolor=T.CANVAS_ALT, zeroline=False, tickfont=dict(color=T.MUTED))
+    # Gridlines use T.LINE (the border/divider token, already tuned for
+    # visibility against T.CANVAS in both modes) rather than T.CANVAS_ALT,
+    # which in dark mode sits too close in luminance to the canvas to read.
+    fig.update_yaxes(showgrid=True, gridcolor=T.LINE, zeroline=False, tickfont=dict(color=T.MUTED))
     return fig
 
 
@@ -34,7 +40,7 @@ def trend_line(df, x, y, height=300):
     fig.add_trace(go.Scatter(
         x=df[x], y=df[y], mode="lines+markers",
         line=dict(color=T.BRAND, width=3, shape="spline"),
-        marker=dict(size=7, color=T.VIOLET, line=dict(color="white", width=1.5)),
+        marker=dict(size=7, color=T.VIOLET, line=dict(color=T.CANVAS, width=1.5)),
         fill="tozeroy",
         fillgradient=dict(
             type="vertical",
@@ -90,7 +96,7 @@ def donut(labels, values, height=300):
         colors.append(fg if fg != T.INFO else T.BRAND)
     fig = go.Figure(go.Pie(
         labels=labels, values=values, hole=0.62,
-        marker=dict(colors=colors, line=dict(color="white", width=2)),
+        marker=dict(colors=colors, line=dict(color=T.CANVAS, width=2)),
         textinfo="label+percent", textfont=dict(size=12),
         hovertemplate="%{label}<br><b>%{value}</b> (%{percent})<extra></extra>",
     ))

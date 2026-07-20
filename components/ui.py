@@ -60,7 +60,20 @@ def inject_styles():
                 background: {T.SIDEBAR_BG} !important;
                 border-right: 1px solid {T.LINE};
             }}
-            [data-testid="stSidebar"] > div {{ background: transparent; }}
+            /* Streamlit's sidebar has nested wrapper divs below [data-testid=
+               "stSidebar"] itself (a resizer div, then stSidebarContent, then
+               a .block-container) -- each can carry its own background from
+               Streamlit's static native theme (.streamlit/config.toml), which
+               paints over the dark background above since a child's own
+               background always covers its parent's. Clearing every known
+               nesting level, not just the direct child, is what actually
+               fixes "the sidebar stays white in dark mode." */
+            [data-testid="stSidebar"] > div,
+            [data-testid="stSidebar"] [data-testid="stSidebarContent"],
+            [data-testid="stSidebar"] [data-testid="stSidebarUserContent"],
+            [data-testid="stSidebar"] .block-container {{
+                background: transparent !important;
+            }}
 
             /* ---------- page load / element animations ---------- */
             @keyframes fadeUp {{
