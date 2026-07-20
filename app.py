@@ -12,6 +12,8 @@ Run locally:      streamlit run app.py
 Run on office LAN: streamlit run app.py --server.address 0.0.0.0
 """
 
+import os
+
 import streamlit as st
 from streamlit_option_menu import option_menu
 
@@ -30,9 +32,11 @@ from pages_logic import (
     assistant,
 )
 
+_LOGO_PATH = os.path.join(os.path.dirname(__file__), "assets", "qadri_logo_transparent.png")
+
 st.set_page_config(
     page_title="Supply Chain Intelligence",
-    page_icon="📦",
+    page_icon=_LOGO_PATH if os.path.exists(_LOGO_PATH) else "📦",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -54,8 +58,8 @@ PAGES = {
 with st.sidebar:
     ui.sidebar_logo()
     st.markdown(
-        f"<h2 style='color:white;margin-bottom:0;text-align:center;'>Qadri Group</h2>"
-        f"<p style='color:{T.GOLD_SOFT};font-weight:600;margin-top:0;text-align:center;'>Supply Chain Intelligence</p>",
+        f"<h2 style='color:{T.NAVY};margin-bottom:0;text-align:center;font-family:{T.DISPLAY_FONT_STACK};'>Qadri Group</h2>"
+        f"<p style='color:{T.GOLD};font-weight:600;margin-top:0;text-align:center;'>Supply Chain Intelligence</p>",
         unsafe_allow_html=True,
     )
     choice = option_menu(
@@ -65,20 +69,20 @@ with st.sidebar:
         default_index=0,
         styles={
             "container": {"padding": "0", "background-color": "transparent"},
-            "icon": {"color": T.GOLD, "font-size": "16px"},
+            "icon": {"color": T.MUTED, "font-size": "16px"},
             "nav-link": {
                 "font-size": "15px",
-                "color": T.BRAND_LIGHT,
+                "color": T.NAVY,
                 "text-align": "left",
                 "margin": "3px 0",
                 "border-radius": "10px",
-                "--hover-color": "rgba(255,255,255,.08)",
+                "--hover-color": T.BRAND_SOFT,
             },
             "nav-link-selected": {
                 "background": T.GRADIENT_BRAND,
                 "color": "white",
                 "border-radius": "10px",
-                "box-shadow": "0 4px 12px rgba(79,70,229,.35)",
+                "box-shadow": "0 4px 12px rgba(79,70,229,.28)",
             },
         },
     )

@@ -28,12 +28,14 @@ def _html_block(s):
 #  GLOBAL STYLES
 # ======================================================================
 def inject_styles():
+    st.markdown(f'<link href="{T.DISPLAY_FONT_URL}" rel="stylesheet">', unsafe_allow_html=True)
     st.markdown(
         f"""
         <style>
-            .stApp {{ background: {T.GRADIENT_CANVAS}; background-attachment: fixed; }}
-            .block-container {{ padding-top: 2.4rem; padding-bottom: 2rem; max-width: 1400px;
+            .stApp {{ background: {T.CANVAS}; }}
+            .block-container {{ padding-top: 2rem; padding-bottom: 2rem; max-width: 1400px;
                                 animation: fadeUp .5s ease; }}
+            html, body, [class*="css"] {{ font-family: {T.FONT_STACK}; }}
 
             /* ---------- hide the Deploy button and main menu ---------- */
             [data-testid="stToolbar"] {{ display: none !important; }}
@@ -51,12 +53,12 @@ def inject_styles():
             [data-testid="stSidebarCollapsedControl"] {{ display: none !important; }}
             [data-testid="stExpandSidebarButton"] {{ display: none !important; }}
             [data-testid="stSidebar"] {{
-                min-width: 300px !important;
-                max-width: 300px !important;
+                min-width: 280px !important;
+                max-width: 280px !important;
                 transform: none !important;
                 visibility: visible !important;
-                background: {T.GRADIENT_SIDEBAR} !important;
-                box-shadow: 4px 0 24px rgba(22,34,60,.18);
+                background: {T.SIDEBAR_BG} !important;
+                border-right: 1px solid {T.LINE};
             }}
             [data-testid="stSidebar"] > div {{ background: transparent; }}
 
@@ -66,47 +68,51 @@ def inject_styles():
                 to   {{ opacity: 1; transform: translateY(0); }}
             }}
 
-            /* ---------- page header: full gradient banner + watermark icon ---------- */
+            /* ---------- page header: restrained white banner + accent badge ---------- */
             .page-banner {{
-                position:relative; overflow:hidden; border-radius:20px;
-                padding:28px 32px; margin-bottom:24px;
-                box-shadow:0 12px 32px rgba(31,45,78,.20);
+                position:relative; display:flex; align-items:center; justify-content:space-between;
+                gap:20px; background:{T.SURFACE}; border:1px solid {T.LINE}; border-radius:18px;
+                padding:22px 28px; margin-bottom:24px;
+                box-shadow:0 2px 10px rgba(31,45,78,.05);
                 animation: fadeUp .5s ease;
             }}
-            .page-banner-icon {{
-                position:absolute; right:-18px; top:50%; transform:translateY(-50%);
-                width:160px; height:160px; opacity:.15; pointer-events:none;
+            .page-banner-badge {{
+                flex:none; width:60px; height:60px; border-radius:16px;
+                display:flex; align-items:center; justify-content:center;
             }}
-            .page-banner-text {{ position:relative; z-index:1; }}
+            .page-banner-badge svg {{ width:28px; height:28px; }}
             .page-title {{
-                color:white; font-size:1.85rem; font-weight:750;
-                margin:0; letter-spacing:-0.01em;
+                font-family:{T.DISPLAY_FONT_STACK}; color:{T.NAVY}; font-size:1.65rem; font-weight:800;
+                margin:0; letter-spacing:-0.02em;
             }}
-            .page-sub {{ color:rgba(255,255,255,.88); font-size:0.95rem; margin:4px 0 0 0; }}
+            .page-sub {{ color:{T.MUTED}; font-size:0.92rem; margin:4px 0 0 0; }}
 
-            /* ---------- KPI card (semantic pastel tint + icon chip + trend pill) ---------- */
+            /* ---------- KPI card: white surface, semantic accent border + icon chip ---------- */
             .kpi {{
-                position:relative;
-                border-radius:18px; padding:18px;
-                box-shadow:0 4px 14px rgba(31,45,78,.08);
+                position:relative; background:{T.SURFACE}; border:1px solid {T.LINE};
+                border-left:3px solid transparent; border-radius:16px; padding:18px;
+                box-shadow:0 2px 10px rgba(31,45,78,.05);
                 transition:transform .18s ease, box-shadow .18s ease;
                 height:100%;
             }}
             .kpi:hover {{
-                transform: translateY(-4px);
-                box-shadow:0 14px 30px rgba(31,45,78,.16);
+                transform: translateY(-3px);
+                box-shadow:0 10px 24px rgba(31,45,78,.10);
             }}
             .kpi-top {{ display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }}
             .kpi-icon-chip {{
-                width:38px; height:38px; border-radius:12px; flex:none;
+                width:36px; height:36px; border-radius:11px; flex:none;
                 display:flex; align-items:center; justify-content:center;
             }}
-            .kpi-icon-chip svg {{ width:19px; height:19px; }}
+            .kpi-icon-chip svg {{ width:18px; height:18px; }}
             .kpi-pill {{ font-size:.72rem; font-weight:700; padding:3px 10px; border-radius:20px; }}
-            .kpi-label {{ font-size:.78rem; font-weight:650; margin:0; }}
-            .kpi-value {{ color:{T.NAVY}; font-size:1.9rem; font-weight:750;
-                          margin:4px 0 0 0; line-height:1.05; }}
+            .kpi-label {{ color:{T.MUTED}; font-size:.76rem; font-weight:650; margin:0; }}
+            .kpi-value {{
+                font-family:{T.DISPLAY_FONT_STACK}; color:{T.NAVY}; font-size:1.85rem; font-weight:800;
+                margin:4px 0 0 0; line-height:1.05;
+            }}
             .kpi-sub {{ color:{T.MUTED}; font-size:.76rem; margin:4px 0 0 0; }}
+            .kpi-spark {{ display:block; width:100%; height:26px; margin-top:10px; }}
 
             /* ---------- buttons: subtle transition + lift ---------- */
             .stButton > button, .stDownloadButton > button {{
@@ -126,7 +132,7 @@ def inject_styles():
             .health {{ border-radius:12px; padding:14px 18px; margin-bottom:6px;
                        display:flex; align-items:center; gap:12px;
                        border:1px solid {T.LINE};
-                       box-shadow:0 2px 10px rgba(79,70,229,.06); }}
+                       box-shadow:0 2px 8px rgba(31,45,78,.04); }}
             .health-icon {{ font-size:1.4rem; font-weight:800; }}
             .health-text {{ font-size:1.0rem; font-weight:600; }}
 
@@ -146,7 +152,26 @@ def inject_styles():
 
             /* ---------- sidebar logo ---------- */
             .sidebar-logo {{ display:flex; justify-content:center; margin:4px 0 10px 0; }}
-            .sidebar-logo img {{ filter: drop-shadow(0 3px 6px rgba(0,0,0,.25)); }}
+
+            /* ---------- chatbot popover trigger (floating, landing page) ----------
+               st.container(key="chat_fab") emits a stable .st-key-chat_fab class —
+               the supported way to target a specific block of real widgets with
+               custom CSS (hand-written <div> wrappers don't work: Streamlit
+               widgets never render literally nested inside markdown HTML). ---------- */
+            .st-key-chat_fab {{
+                position:fixed; bottom:28px; right:32px; z-index:999; width:auto;
+            }}
+            .st-key-chat_fab [data-testid="stPopover"] > button {{
+                background:{T.GRADIENT_BRAND} !important; color:white !important;
+                border:none !important; border-radius:999px !important;
+                padding:12px 22px !important; font-weight:700 !important;
+                box-shadow:0 8px 24px rgba(79,70,229,.4) !important;
+                transition: transform .15s ease, box-shadow .15s ease;
+            }}
+            .st-key-chat_fab [data-testid="stPopover"] > button:hover {{
+                transform: translateY(-2px);
+                box-shadow:0 12px 30px rgba(79,70,229,.5) !important;
+            }}
         </style>
         """,
         unsafe_allow_html=True,
@@ -154,25 +179,27 @@ def inject_styles():
 
 
 # ======================================================================
-#  HEADER  (full gradient banner, distinct per module)
+#  HEADER  (restrained white banner, module accent shows up only in the badge)
 # ======================================================================
 def page_header(title, subtitle="", module="dashboard"):
     mod = T.MODULES.get(module, T.MODULES["dashboard"])
     icon_path = T.MODULE_ICONS.get(module, T.MODULE_ICONS["dashboard"])
     _html_block(f"""
-        <div class="page-banner" style="background:{mod['gradient']};">
-            <svg class="page-banner-icon" viewBox="0 0 24 24" fill="none" stroke="white"
-                 stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">{icon_path}</svg>
+        <div class="page-banner">
             <div class="page-banner-text">
                 <p class="page-title">{title}</p>
                 {f'<p class="page-sub">{subtitle}</p>' if subtitle else ""}
+            </div>
+            <div class="page-banner-badge" style="background:{mod['soft']};color:{mod['accent']};">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{icon_path}</svg>
             </div>
         </div>
         """)
 
 
 # ======================================================================
-#  KPI CARD  (semantic pastel tint + icon chip + trend pill)
+#  KPI CARD  (white surface, semantic accent chip/border + optional sparkline)
 # ======================================================================
 _ICON_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
 _ICON_ALERT = ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" '
@@ -181,32 +208,52 @@ _ICON_ALERT = ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strok
 _ICON_DOT = '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg>'
 
 
-def kpi_card(label, value, delta=None, direction=None, good_when="down", sub=""):
-    """A KPI card whose background tint reflects whether the number is
-    actually good or bad — same R/A/G discipline as everywhere else in the
-    app, just applied to the whole card instead of a small dot, so it reads
-    at a glance the way the reference dashboards do.
+def _sparkline_svg(values, color, width=200, height=26):
+    """A minimal, dependency-free inline sparkline — no chart library needed
+    for a 4-8-point trend line inside a KPI card. Returns "" if there isn't
+    enough real data to draw a line (never fabricates points).
+    """
+    values = [v for v in values if v is not None]
+    if len(values) < 2:
+        return ""
+    lo, hi = min(values), max(values)
+    span = (hi - lo) or 1
+    n = len(values)
+    pts = [f"{(i / (n - 1)) * width:.1f},{height - 2 - ((v - lo) / span) * (height - 4):.1f}"
+           for i, v in enumerate(values)]
+    return (f'<svg class="kpi-spark" viewBox="0 0 {width} {height}" preserveAspectRatio="none">'
+            f'<polyline points="{" ".join(pts)}" fill="none" stroke="{color}" '
+            f'stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>')
+
+
+def kpi_card(label, value, delta=None, direction=None, good_when="down", sub="", spark=None):
+    """A restrained KPI card: white surface, with the R/A/G semantic signal
+    carried by a small icon chip + a thin left-edge accent border rather
+    than a full-card color wash. `spark`, if given, is a list of real
+    historical values (e.g. weekly totals) rendered as a tiny trend line —
+    omitted entirely when there's no real series behind a number.
     """
     pill_html = ""
     if direction in ("up", "down"):
         is_good = (direction == good_when)
-        tint, ink, icon = (T.HEALTHY_BG, T.HEALTHY, _ICON_CHECK) if is_good else (T.RISK_BG, T.RISK, _ICON_ALERT)
+        ink, icon = (T.HEALTHY, _ICON_CHECK) if is_good else (T.RISK, _ICON_ALERT)
         arrow = "▲" if direction == "up" else "▼"
-        pill_html = f'<span class="kpi-pill" style="background:rgba(255,255,255,.65);color:{ink};">{arrow} {delta}</span>'
+        pill_html = f'<span class="kpi-pill" style="background:{T.CANVAS_ALT};color:{ink};">{arrow} {delta}</span>'
         delta_sub_html = ""
     else:
-        tint, ink, icon = T.BRAND_SOFT, T.BRAND, _ICON_DOT
+        ink, icon = T.BRAND, _ICON_DOT
         delta_sub_html = f'<p class="kpi-sub">{delta}</p>' if delta else ""
     sub_html = f'<p class="kpi-sub">{sub}</p>' if sub else ""
+    spark_html = _sparkline_svg(spark, ink) if spark else ""
     _html_block(f"""
-        <div class="kpi" style="background:{tint};">
+        <div class="kpi" style="border-left-color:{ink};">
             <div class="kpi-top">
-                <div class="kpi-icon-chip" style="background:{ink};color:white;">{icon}</div>
+                <div class="kpi-icon-chip" style="background:{ink}1A;color:{ink};">{icon}</div>
                 {pill_html}
             </div>
             <p class="kpi-value">{value}</p>
-            <p class="kpi-label" style="color:{ink};">{label}</p>
-            {delta_sub_html}{sub_html}
+            <p class="kpi-label">{label}</p>
+            {delta_sub_html}{sub_html}{spark_html}
         </div>
         """)
 
@@ -329,7 +376,7 @@ def sidebar_logo():
 
 
 def assistant_header():
-    """Branded header block for the assistant page — same gradient-banner
+    """Branded header block for the assistant page — same restrained-banner
     system as every other page (module="assistant"), with the avatar and
     the online badge laid over it.
     """
@@ -337,22 +384,60 @@ def assistant_header():
     mod = T.MODULES["assistant"]
     icon_path = T.MODULE_ICONS["assistant"]
     _html_block(f"""
-        <div class="page-banner" style="background:{mod['gradient']}; padding:20px 28px;">
-            <svg class="page-banner-icon" viewBox="0 0 24 24" fill="none" stroke="white"
-                 stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">{icon_path}</svg>
+        <div class="page-banner">
             <div class="page-banner-text" style="display:flex;align-items:center;gap:14px;">
-                <img src="{avatar}" width="46" height="46"
-                     style="border-radius:10px;filter:drop-shadow(0 2px 5px rgba(0,0,0,.25));"/>
+                <img src="{avatar}" width="46" height="46" style="border-radius:10px;"/>
                 <div>
-                    <p class="page-title" style="font-size:1.5rem;line-height:1.1;">{ASSISTANT_NAME}</p>
+                    <p class="page-title" style="font-size:1.4rem;line-height:1.1;">{ASSISTANT_NAME}</p>
                     <p class="page-sub">Your Qadri Group supply chain assistant</p>
                 </div>
-                <span style="margin-left:auto;display:flex;align-items:center;gap:6px;
-                             background:rgba(255,255,255,.25);color:white;padding:5px 12px;
+                <span style="display:flex;align-items:center;gap:6px;
+                             background:{T.HEALTHY_BG};color:{T.HEALTHY};padding:5px 12px;
                              border-radius:20px;font-size:0.8rem;font-weight:650;">
-                    <span style="width:8px;height:8px;border-radius:50%;background:#4ADE80;
+                    <span style="width:8px;height:8px;border-radius:50%;background:{T.HEALTHY};
                                  display:inline-block;"></span> Online
                 </span>
             </div>
+            <div class="page-banner-badge" style="background:{mod['soft']};color:{mod['accent']};">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{icon_path}</svg>
+            </div>
         </div>
         """)
+
+
+def chat_popover(on_ask, history_limit=6):
+    """A small floating chat widget, meant for the landing page — a quick
+    question without leaving the dashboard. Shares the same conversation
+    history as the full Assistant page (st.session_state.chat), so it reads
+    as one continuous assistant rather than two separate bots.
+
+    Stays presentation-only like the rest of this module: `on_ask(question)`
+    is supplied by the calling page (which already imports backend.data_access)
+    and must return {understood, answer, table}.
+    """
+    if "chat" not in st.session_state:
+        st.session_state.chat = []
+
+    with st.container(key="chat_fab"):
+        with st.popover("💬 Ask QadriBot"):
+            st.markdown(
+                f"<p style='font-weight:800;color:{T.NAVY};margin:0 0 10px 0;"
+                f"font-family:{T.DISPLAY_FONT_STACK};'>{ASSISTANT_NAME}</p>",
+                unsafe_allow_html=True,
+            )
+            avatar = qadri_avatar_svg(28)
+            history = st.session_state.chat[-history_limit:]
+            if not history:
+                st.caption("Ask about purchases, inventory, imports, or logistics.")
+            for turn in history:
+                with st.chat_message(turn["role"], avatar=avatar if turn["role"] == "assistant" else None):
+                    st.markdown(turn["content"])
+            if prompt := st.chat_input("Message QadriBot...", key="fab_chat_input"):
+                st.session_state.chat.append({"role": "user", "content": prompt})
+                result = on_ask(prompt)
+                answer = f"*I understood: {result['understood']}*\n\n{result['answer']}"
+                st.session_state.chat.append(
+                    {"role": "assistant", "content": answer, "table": result.get("table")}
+                )
+                st.rerun()

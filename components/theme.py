@@ -4,40 +4,47 @@ Design tokens — the single source of truth for the app's visual language.
 Every color, font, and status meaning is defined ONCE here. Components and
 pages import from this file, so a brand change happens in one place.
 
-Palette philosophy:
-  - NAVY   = ink (body text, headers) — kept dark/high-contrast for readability.
-  - BRAND/VIOLET = the vivid gradient accent (cards, sidebar, charts, active
-    states) that replaces the old flat-white/navy-only look.
+Palette philosophy (restrained SaaS, not a rainbow):
+  - NAVY   = ink (body text, headers) — dark/high-contrast for readability.
+  - CANVAS/SURFACE = neutral near-white. Color is not page decoration —
+    a confident, minimal product doesn't need a colored background to look
+    designed; the earlier per-module gradient-banner approach read as
+    "colorful template" rather than "premium product," so it's gone.
+  - BRAND/VIOLET = the ONE signature gradient, used with intent (active
+    nav, primary chart series, the brand mark) — not spread across every
+    page in a different hue.
+  - MODULES  = each page still gets a distinguishing accent color, but it
+    shows up small (an icon badge, an illustration) — never as a full-page
+    wash. Color as data/identity, not decoration.
   - GOLD   = warm brand accent, used sparingly for emphasis (unchanged role).
   - R/A/G  = status ONLY. Red/amber/green never appear as decoration,
              only to communicate risk / watch / healthy. This discipline
              is what separates an enterprise look from a prototype.
 """
 
-# --- Brand: ink + structure (unchanged — stays high-contrast for text) ---
+# --- Brand: ink + structure ---
 NAVY        = "#1F2D4E"   # primary structure / body text
-NAVY_DEEP   = "#16223C"   # darker surfaces
+NAVY_DEEP   = "#16223C"   # darker surfaces (rarely used now — sidebar is light)
 GOLD        = "#BF9000"   # warm brand accent
 GOLD_SOFT   = "#E7D9A8"   # subtle accent fills
 
-# --- Brand: vivid gradient accent (new) ---
-BRAND        = "#4F46E5"   # indigo-600 — primary vivid accent
-BRAND_DEEP   = "#3730A3"   # indigo-800 — gradient partner / hover / sidebar
+# --- Brand: the one signature gradient ---
+BRAND        = "#4F46E5"   # indigo-600 — primary accent, used with intent
+BRAND_DEEP   = "#3730A3"   # indigo-800 — gradient partner / hover
 BRAND_LIGHT  = "#818CF8"   # indigo-400 — light tint, chips
 BRAND_SOFT   = "#EEECFC"   # indigo-50  — soft fills, chip backgrounds
 VIOLET       = "#8B5CF6"   # violet-500 — secondary gradient stop
 
-GRADIENT_BRAND   = f"linear-gradient(135deg, {BRAND} 0%, {VIOLET} 100%)"
-GRADIENT_SIDEBAR = f"linear-gradient(180deg, {NAVY_DEEP} 0%, {BRAND_DEEP} 100%)"
-GRADIENT_CANVAS  = "linear-gradient(160deg, #F7F6FF 0%, #F2F1FB 45%, #FBF6EA 100%)"
+GRADIENT_BRAND = f"linear-gradient(135deg, {BRAND} 0%, {VIOLET} 100%)"
 
-# --- Neutrals ---
+# --- Neutrals: restrained, mostly-white canvas ---
 INK         = "#1F2D4E"   # main text (same as navy for cohesion)
 MUTED       = "#5A6478"   # secondary text
-LINE        = "#E4E8F0"   # borders / dividers
+LINE        = "#E6E8EF"   # borders / dividers
 SURFACE     = "#FFFFFF"   # cards
-CANVAS      = "#F4F6FA"   # page background (flat fallback; GRADIENT_CANVAS used where supported)
-CANVAS_ALT  = "#EEF1F7"   # zebra / subtle fills
+CANVAS      = "#F7F8FB"   # page background — flat, neutral, near-white
+CANVAS_ALT  = "#F0F1F5"   # zebra / subtle fills
+SIDEBAR_BG  = "#FFFFFF"   # sidebar — light, matches the restrained reference UIs
 
 # --- Semantic status (R/A/G) ---
 RISK        = "#C0392B"   # red   — delayed, at risk, critical
@@ -53,23 +60,26 @@ INFO_BG     = "#EAF2FB"
 CHART_SEQUENCE = [BRAND, GOLD, VIOLET, "#4A6FA5", "#8C6D1F", "#7089B0"]
 
 # --- Type ---
-FONT_STACK = "'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif"
+# Manrope (Google Font, loaded in ui.inject_styles) for headlines/numbers —
+# the single highest-impact change for reading as "designed" rather than
+# "default app font." System sans stays as the body-text/UI fallback.
+DISPLAY_FONT_NAME = "Manrope"
+DISPLAY_FONT_URL = "https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&display=swap"
+DISPLAY_FONT_STACK = "'Manrope', 'Segoe UI', system-ui, -apple-system, sans-serif"
+FONT_STACK = "'Segoe UI', system-ui, -apple-system, sans-serif"
 
 # --- Per-module identity ---
-# Each page gets its own gradient + a low-opacity watermark icon on its
-# header banner, so Purchases/Inventory/Imports/Logistics/Reports/Assistant
-# each read as visually distinct at a glance, not just a color swap of the
-# same page. Icon paths are simplified Lucide-style line icons (public
-# domain shapes), inlined as raw SVG so there's no external icon-font
-# dependency.
+# Each page keeps a distinguishing accent color, but — unlike the earlier
+# full-gradient-banner version — it now shows up small: an icon badge, a
+# thin rule, an illustration. Color as identity, not page-wide decoration.
 MODULES = {
-    "dashboard": {"gradient": GRADIENT_BRAND, "solid": BRAND},
-    "purchases": {"gradient": "linear-gradient(135deg, #F59E0B 0%, #FB923C 100%)", "solid": "#F59E0B"},
-    "inventory": {"gradient": "linear-gradient(135deg, #10B981 0%, #14B8A6 100%)", "solid": "#10B981"},
-    "imports":   {"gradient": "linear-gradient(135deg, #0EA5E9 0%, #3B82F6 100%)", "solid": "#0EA5E9"},
-    "logistics": {"gradient": "linear-gradient(135deg, #FB7185 0%, #F472B6 100%)", "solid": "#FB7185"},
-    "reports":   {"gradient": "linear-gradient(135deg, #06B6D4 0%, #0EA5E9 100%)", "solid": "#06B6D4"},
-    "assistant": {"gradient": "linear-gradient(135deg, #8B5CF6 0%, #D946EF 100%)", "solid": "#8B5CF6"},
+    "dashboard": {"accent": BRAND,     "soft": BRAND_SOFT},
+    "purchases": {"accent": "#F59E0B", "soft": "#FEF3E2"},
+    "inventory": {"accent": "#10B981", "soft": "#E6F7F1"},
+    "imports":   {"accent": "#0EA5E9", "soft": "#E5F4FC"},
+    "logistics": {"accent": "#FB7185", "soft": "#FDEBEE"},
+    "reports":   {"accent": "#06B6D4", "soft": "#E3F7FA"},
+    "assistant": {"accent": "#8B5CF6", "soft": "#F1EDFC"},
 }
 
 MODULE_ICONS = {

@@ -45,6 +45,31 @@ def purchase_trend():
     return pd.read_sql(query, get_engine())
 
 
+def weekly_trend():
+    """Real weekly buckets from purchases_data — feeds the KPI sparklines.
+
+    NOTE: the current extract spans ~1 month, so this is a handful of real
+    points (however many ISO weeks exist in the data), not a fabricated
+    smooth series. `ui.kpi_card`'s sparkline renders nothing if it gets
+    fewer than 2 points, so a thin extract degrades gracefully.
+    """
+    query = text("""
+        SELECT
+            DATE_TRUNC('week', purchase) AS week,
+            SUM(amount) AS purchase_value,
+            SUM(CASE WHEN required_d IS NOT NULL AND purchase > required_d THEN 1 ELSE 0 END) AS delayed,
+            COUNT(*) AS total,
+            AVG(purchase - ppc_store) AS avg_cycle_days
+        FROM public.purchases_data
+        WHERE purchase IS NOT NULL
+        GROUP BY week
+        ORDER BY week
+    """)
+    df = pd.read_sql(query, get_engine())
+    df["on_time_pct"] = (df["total"] - df["delayed"]) / df["total"] * 100
+    return df
+
+
 def alerts():
     """Real attention panel, derived from suppliers / stock / purchases / imports.
 

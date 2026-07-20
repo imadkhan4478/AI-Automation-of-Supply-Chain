@@ -14,6 +14,7 @@ from components import ui, charts
 
 def render():
     ui.page_header("Executive Dashboard", "Supply chain performance at a glance", module="dashboard")
+    ui.chat_popover(db.ask_assistant)
 
     # --- Health banner: the one-line answer ---
     h = db.health()
@@ -22,23 +23,31 @@ def render():
 
     # --- KPI grid (2 rows x 3) with trend + direction ---
     k = db.dashboard_kpis_rich()
+    # Real weekly series behind 4 of the 6 cards, for a real (not fabricated)
+    # sparkline. items_at_risk/open_imports are point-in-time snapshots with
+    # no history table, so they intentionally get no sparkline.
+    wk = db.weekly_trend()
 
     r1 = st.columns(3)
     with r1[0]:
         pv = k["purchase_value"]
-        ui.kpi_card("Purchase Value", ui.money(pv["value"]), pv["delta"], pv["direction"], pv["good_when"])
+        ui.kpi_card("Purchase Value", ui.money(pv["value"]), pv["delta"], pv["direction"], pv["good_when"],
+                     spark=wk["purchase_value"].tolist())
     with r1[1]:
         ct = k["avg_cycle_time"]
-        ui.kpi_card("Avg Cycle Time", ct["value"], ct["delta"], ct["direction"], ct["good_when"])
+        ui.kpi_card("Avg Cycle Time", ct["value"], ct["delta"], ct["direction"], ct["good_when"],
+                     spark=wk["avg_cycle_days"].tolist())
     with r1[2]:
         do = k["delayed_orders"]
-        ui.kpi_card("Delayed Orders", f"{do['value']:,}", do["delta"], do["direction"], do["good_when"])
+        ui.kpi_card("Delayed Orders", f"{do['value']:,}", do["delta"], do["direction"], do["good_when"],
+                     spark=wk["delayed"].tolist())
 
     st.write("")
     r2 = st.columns(3)
     with r2[0]:
         ot = k["on_time_rate"]
-        ui.kpi_card("On-Time Delivery", ot["value"], ot["delta"], ot["direction"], ot["good_when"])
+        ui.kpi_card("On-Time Delivery", ot["value"], ot["delta"], ot["direction"], ot["good_when"],
+                     spark=wk["on_time_pct"].tolist())
     with r2[1]:
         ir = k["items_at_risk"]
         ui.kpi_card("Items at Risk", f"{ir['value']}", ir["delta"], ir["direction"], ir["good_when"])

@@ -6,6 +6,8 @@ export buttons are wired to intents the backend will fulfil later; the UI
 captures the full report definition today.
 """
 
+import datetime
+
 import streamlit as st
 import pandas as pd
 
@@ -13,13 +15,24 @@ from backend import data_access as db
 from components import ui
 
 
-# Map each source to its loader and its natural status column (for coloring)
+# Map each source to its loader, its natural status column (for row coloring),
+# and its primary date column (for the quick date-range filter). "Logistics"'s
+# status_col was "shipment_status" here but the connected logistics() function
+# names the real column "status" (a leftover from the old stub, which used a
+# different name) -- fixed, since it silently broke row coloring on that report.
 SOURCES = {
-    "Purchases": {"loader": lambda: db.purchases(), "status_col": "status"},
-    "Inventory": {"loader": lambda: db.stock(),     "status_col": "stock_status"},
-    "Imports":   {"loader": lambda: db.imports(),   "status_col": "current_status"},
-    "Logistics": {"loader": lambda: db.logistics(), "status_col": "shipment_status"},
+    "Purchases": {"loader": lambda: db.purchases(), "status_col": "status", "date_col": "purchase_date"},
+    "Inventory": {"loader": lambda: db.stock(),     "status_col": "stock_status", "date_col": None},
+    "Imports":   {"loader": lambda: db.imports(),   "status_col": "current_status", "date_col": "demand_date"},
+    "Logistics": {"loader": lambda: db.logistics(), "status_col": "status", "date_col": "sailing_date"},
 }
+
+
+def _is_date_series(series):
+    sample = series.dropna()
+    if sample.empty:
+        return False
+    return isinstance(sample.iloc[0], (datetime.date, datetime.datetime, pd.Timestamp))
 
 
 def render():
@@ -31,10 +44,42 @@ def render():
 
     full = SOURCES[source]["loader"]()
     status_col = SOURCES[source]["status_col"]
+    date_col = SOURCES[source]["date_col"]
     all_cols = list(full.columns)
+    filtered = full.copy()
+    quick_filter_count = 0
 
-    # -------------------------------------------------- 2. Columns
-    ui.section("2 · Select columns to include")
+    # -------------------------------------------------- 2. Quick filters
+    # The most common filtering need (status, date range) shown immediately —
+    # no extra "which columns do you want to filter" step first. Advanced
+    # per-column filtering (step 4) still covers everything else.
+    if status_col in all_cols or date_col:
+        ui.section("2 · Quick filters")
+        qcols = st.columns(2)
+        with qcols[0]:
+            if status_col in all_cols:
+                options = sorted(full[status_col].dropna().astype(str).unique().tolist())
+                picked = st.multiselect(f"Status ({status_col})", options, default=[])
+                if picked:
+                    filtered = filtered[filtered[status_col].astype(str).isin(picked)]
+                    quick_filter_count += 1
+        with qcols[1]:
+            if date_col and date_col in all_cols and _is_date_series(full[date_col]):
+                non_null = full[date_col].dropna()
+                if not non_null.empty:
+                    lo, hi = min(non_null), max(non_null)
+                    if lo == hi:
+                        st.caption(f"**{date_col}**: all = {lo}")
+                    else:
+                        sel = st.slider(f"Date range ({date_col})", lo, hi, (lo, hi))
+                        filtered = filtered[filtered[date_col].apply(
+                            lambda v: pd.notna(v) and sel[0] <= v <= sel[1])]
+                        if sel != (lo, hi):
+                            quick_filter_count += 1
+        st.write("")
+
+    # -------------------------------------------------- 3. Columns
+    ui.section("3 · Select columns to include")
     chosen_cols = st.multiselect(
         "Columns", all_cols, default=all_cols, label_visibility="collapsed",
         help="Pick any combination of columns for your report.",
@@ -43,34 +88,40 @@ def render():
         st.info("Select at least one column to build your report.")
         return
 
-    # -------------------------------------------------- 3. Filters (any column)
-    ui.section("3 · Add filters")
-    st.caption("Filter on any column. Text/category columns offer value pickers; "
-               "numeric columns offer a range.")
-
-    filter_cols = st.multiselect(
-        "Filter which columns?", all_cols, default=[],
-        help="Choose one or more columns to filter on.",
-    )
-
-    filtered = full.copy()
-    if filter_cols:
-        fcols = st.columns(min(len(filter_cols), 3))
-        for i, col in enumerate(filter_cols):
-            with fcols[i % len(fcols)]:
-                series = full[col]
-                if pd.api.types.is_numeric_dtype(series):
-                    lo, hi = float(series.min()), float(series.max())
-                    if lo == hi:
-                        st.caption(f"**{col}**: all = {lo:g}")
+    # -------------------------------------------------- 4. Advanced filters (any column)
+    with st.expander("4 · Advanced filters — any column"):
+        st.caption("Filter on any column. Text/category columns offer value pickers; "
+                   "numeric and date columns offer a range.")
+        filter_cols = st.multiselect(
+            "Filter which columns?", all_cols, default=[],
+            help="Choose one or more columns to filter on.",
+        )
+        if filter_cols:
+            fcols = st.columns(min(len(filter_cols), 3))
+            for i, col in enumerate(filter_cols):
+                with fcols[i % len(fcols)]:
+                    series = full[col]
+                    if pd.api.types.is_numeric_dtype(series):
+                        lo, hi = float(series.min()), float(series.max())
+                        if lo == hi:
+                            st.caption(f"**{col}**: all = {lo:g}")
+                        else:
+                            sel = st.slider(col, lo, hi, (lo, hi))
+                            filtered = filtered[filtered[col].between(sel[0], sel[1])]
+                    elif _is_date_series(series):
+                        non_null = series.dropna()
+                        lo, hi = min(non_null), max(non_null)
+                        if lo == hi:
+                            st.caption(f"**{col}**: all = {lo}")
+                        else:
+                            sel = st.slider(col, lo, hi, (lo, hi), key=f"adv_{col}")
+                            filtered = filtered[filtered[col].apply(
+                                lambda v: pd.notna(v) and sel[0] <= v <= sel[1])]
                     else:
-                        sel = st.slider(col, lo, hi, (lo, hi))
-                        filtered = filtered[filtered[col].between(sel[0], sel[1])]
-                else:
-                    options = sorted(series.dropna().astype(str).unique().tolist())
-                    picked = st.multiselect(col, options, default=[])
-                    if picked:
-                        filtered = filtered[filtered[col].astype(str).isin(picked)]
+                        options = sorted(series.dropna().astype(str).unique().tolist())
+                        picked = st.multiselect(col, options, default=[])
+                        if picked:
+                            filtered = filtered[filtered[col].astype(str).isin(picked)]
 
     # Apply chosen columns to the final result
     result = filtered[chosen_cols]
@@ -83,17 +134,17 @@ def render():
     with c2:
         ui.kpi_card("Columns", f"{result.shape[1]}")
     with c3:
-        active = len(filter_cols)
+        active = quick_filter_count + len(filter_cols)
         ui.kpi_card("Active Filters", f"{active}")
 
-    # -------------------------------------------------- 4. Preview
+    # -------------------------------------------------- 5. Preview
     st.write("")
-    ui.section("4 · Preview")
+    ui.section("5 · Preview")
     sc = status_col if status_col in result.columns else None
     ui.styled_table(result, status_col=sc, height=340)
 
-    # -------------------------------------------------- 5. Actions
-    ui.section("5 · Do something with this report")
+    # -------------------------------------------------- 6. Actions
+    ui.section("6 · Do something with this report")
     a1, a2, a3, a4 = st.columns(4)
 
     with a1:
