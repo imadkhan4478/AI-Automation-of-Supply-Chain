@@ -172,6 +172,52 @@ def inject_styles():
                 transform: translateY(-2px);
                 box-shadow:0 12px 30px rgba(79,70,229,.5) !important;
             }}
+
+            /* ---------- chat popover panel + bubbles (shared: Assistant page + FAB) ---------- */
+            div[data-testid="stPopoverBody"] {{
+                background:{T.SURFACE} !important; border:1px solid {T.LINE} !important;
+                border-radius:16px !important; box-shadow:0 16px 40px rgba(0,0,0,.18) !important;
+            }}
+            [data-testid="stChatMessage"] {{
+                background:{T.CANVAS_ALT}; border-radius:14px; border:1px solid {T.LINE};
+            }}
+            [data-testid="stChatInput"] textarea {{
+                background:{T.SURFACE} !important; color:{T.INK} !important;
+            }}
+            [data-testid="stChatInput"] {{
+                border:1px solid {T.LINE} !important; border-radius:14px !important;
+                background:{T.SURFACE} !important;
+            }}
+
+            /* ---------- body text + native widgets: mode-aware ----------
+               Broad pass so text stays readable and the most common inputs
+               (text/select/multiselect/slider/expander/tabs/buttons) follow
+               the toggle. st.dataframe renders its grid on <canvas> — cell
+               colors DO follow our styled_table()/status_colors() (they're
+               set explicitly per-row), but the grid's own chrome (header
+               row, scrollbar) is Streamlit's native theme engine and isn't
+               reachable from CSS; a known, minor seam in dark mode. ---------- */
+            .stApp, .stApp p, .stApp span, .stApp label, [data-testid="stMarkdownContainer"] {{
+                color:{T.INK};
+            }}
+            [data-testid="stCaptionContainer"] {{ color:{T.MUTED} !important; }}
+            [data-testid="stTextInput"] input, [data-testid="stTextArea"] textarea,
+            [data-testid="stNumberInput"] input {{
+                background:{T.SURFACE} !important; color:{T.INK} !important; border-color:{T.LINE} !important;
+            }}
+            [data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+            [data-testid="stMultiSelect"] div[data-baseweb="select"] > div {{
+                background:{T.SURFACE} !important; color:{T.INK} !important; border-color:{T.LINE} !important;
+            }}
+            [data-testid="stExpander"] {{
+                background:{T.SURFACE} !important; border:1px solid {T.LINE} !important; border-radius:12px !important;
+            }}
+            [data-testid="stTabs"] [data-baseweb="tab"] {{ color:{T.MUTED}; }}
+            [data-testid="stTabs"] [aria-selected="true"] {{ color:{T.BRAND}; }}
+            .stButton > button, .stDownloadButton > button, [data-testid="stFormSubmitButton"] button {{
+                background:{T.SURFACE}; color:{T.INK}; border:1px solid {T.LINE};
+            }}
+            [data-testid="stDataFrame"] {{ border:1px solid {T.LINE}; border-radius:10px; overflow:hidden; }}
         </style>
         """,
         unsafe_allow_html=True,
@@ -182,7 +228,7 @@ def inject_styles():
 #  HEADER  (restrained white banner, module accent shows up only in the badge)
 # ======================================================================
 def page_header(title, subtitle="", module="dashboard"):
-    mod = T.MODULES.get(module, T.MODULES["dashboard"])
+    accent, soft = T.module_colors(module)
     icon_path = T.MODULE_ICONS.get(module, T.MODULE_ICONS["dashboard"])
     _html_block(f"""
         <div class="page-banner">
@@ -190,10 +236,27 @@ def page_header(title, subtitle="", module="dashboard"):
                 <p class="page-title">{title}</p>
                 {f'<p class="page-sub">{subtitle}</p>' if subtitle else ""}
             </div>
-            <div class="page-banner-badge" style="background:{mod['soft']};color:{mod['accent']};">
+            <div class="page-banner-badge" style="background:{soft};color:{accent};">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
                      stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{icon_path}</svg>
             </div>
+        </div>
+        """)
+
+
+def hero_mark(image_uri, title, subtitle, size=64):
+    """Centered mark + headline for a hero/empty state (e.g. the Assistant
+    page's search-homepage-style landing). Caller is responsible for column
+    layout (`st.columns([1, 2, 1])`) to constrain width — this only renders
+    the centered content itself.
+    """
+    _html_block(f"""
+        <div style="text-align:center;">
+            <img src="{image_uri}" width="{size}" height="{size}"
+                 style="border-radius:18px;box-shadow:0 10px 28px rgba(79,70,229,.28);margin-bottom:18px;"/>
+            <p style="font-family:{T.DISPLAY_FONT_STACK};font-size:1.9rem;font-weight:800;
+                      color:{T.NAVY};margin:0 0 8px 0;letter-spacing:-0.02em;">{title}</p>
+            <p style="color:{T.MUTED};font-size:1rem;margin:0 0 26px 0;">{subtitle}</p>
         </div>
         """)
 
@@ -381,7 +444,7 @@ def assistant_header():
     the online badge laid over it.
     """
     avatar = qadri_avatar_svg(46)
-    mod = T.MODULES["assistant"]
+    accent, soft = T.module_colors("assistant")
     icon_path = T.MODULE_ICONS["assistant"]
     _html_block(f"""
         <div class="page-banner">
@@ -398,7 +461,7 @@ def assistant_header():
                                  display:inline-block;"></span> Online
                 </span>
             </div>
-            <div class="page-banner-badge" style="background:{mod['soft']};color:{mod['accent']};">
+            <div class="page-banner-badge" style="background:{soft};color:{accent};">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
                      stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{icon_path}</svg>
             </div>
@@ -419,17 +482,25 @@ def chat_popover(on_ask, history_limit=6):
     if "chat" not in st.session_state:
         st.session_state.chat = []
 
+    avatar = qadri_avatar_svg(30)
     with st.container(key="chat_fab"):
-        with st.popover("💬 Ask QadriBot"):
-            st.markdown(
-                f"<p style='font-weight:800;color:{T.NAVY};margin:0 0 10px 0;"
-                f"font-family:{T.DISPLAY_FONT_STACK};'>{ASSISTANT_NAME}</p>",
-                unsafe_allow_html=True,
-            )
-            avatar = qadri_avatar_svg(28)
+        with st.popover("💬 Ask QadriBot", width=380):
+            _html_block(f"""
+                <div style="margin:-1rem -1rem 12px -1rem; padding:16px 18px;
+                            background:{T.GRADIENT_BRAND}; border-radius:12px 12px 0 0;
+                            display:flex; align-items:center; gap:10px;">
+                    <img src="{avatar}" width="30" height="30" style="border-radius:8px;"/>
+                    <div>
+                        <p style="margin:0;color:white;font-weight:800;font-size:1rem;
+                                  font-family:{T.DISPLAY_FONT_STACK};line-height:1.1;">{ASSISTANT_NAME}</p>
+                        <p style="margin:0;color:rgba(255,255,255,.85);font-size:.74rem;">
+                            Ask about your supply chain</p>
+                    </div>
+                </div>
+                """)
             history = st.session_state.chat[-history_limit:]
             if not history:
-                st.caption("Ask about purchases, inventory, imports, or logistics.")
+                st.caption("Try: \"Which purchase orders are delayed?\"")
             for turn in history:
                 with st.chat_message(turn["role"], avatar=avatar if turn["role"] == "assistant" else None):
                     st.markdown(turn["content"])

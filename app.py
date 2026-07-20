@@ -41,6 +41,12 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# Streamlit only imports theme.py once per server process -- reruns don't
+# re-execute it -- so switching palettes can't rely on re-import. Instead
+# set_mode() reassigns theme.py's module globals in place; this MUST run
+# before inject_styles() and before any page reads a T.XXX color, since
+# every other file resolves T.XXX as a plain attribute lookup at call time.
+T.set_mode(st.session_state.get("dark_mode", False))
 inject_styles()
 
 # --- Navigation config (single source of truth) ---
@@ -62,6 +68,13 @@ with st.sidebar:
         f"<p style='color:{T.GOLD};font-weight:600;margin-top:0;text-align:center;'>Supply Chain Intelligence</p>",
         unsafe_allow_html=True,
     )
+    st.write("")
+    tcol1, tcol2 = st.columns([1, 4])
+    with tcol1:
+        st.write("🌙" if st.session_state.get("dark_mode") else "☀️")
+    with tcol2:
+        st.toggle("Dark mode", key="dark_mode")
+    st.write("")
     choice = option_menu(
         menu_title=None,
         options=list(PAGES.keys()),
