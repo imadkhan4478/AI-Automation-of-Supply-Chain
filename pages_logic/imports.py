@@ -8,6 +8,7 @@ inconsistent. It's computed here from the already-filtered DataFrame
 instead, so the two always agree.
 """
 
+import pandas as pd
 import streamlit as st
 
 from backend import data_access as db
@@ -68,6 +69,30 @@ def render():
             charts.category_bar(by_cat, "category", "total_value_pkr", height=300)
     else:
         st.info("No imports match the current filter.")
+
+    st.write("")
+
+    # -------------------------------------------------- More insight: trend + docs status
+    if len(data):
+        trend_src = data.dropna(subset=["demand_date"])
+        d1, d2 = st.columns(2)
+        with d1:
+            ui.section("Import Value Trend (by month)")
+            if len(trend_src):
+                by_month = (trend_src.assign(month=pd.to_datetime(trend_src["demand_date"]).dt.to_period("M").dt.to_timestamp())
+                            .groupby("month", as_index=False)["total_value_pkr"].sum())
+                charts.trend_line(by_month, "month", "total_value_pkr", height=280)
+            else:
+                st.caption("No demand dates in the current view yet.")
+        with d2:
+            ui.section("Top Suppliers (value)")
+            sup_src = data.dropna(subset=["supplier"])
+            if len(sup_src):
+                by_supplier = (sup_src.groupby("supplier", as_index=False)["total_value_pkr"].sum()
+                               .sort_values("total_value_pkr", ascending=False).head(8))
+                charts.ranked_bar(by_supplier, "supplier", "total_value_pkr", height=280)
+            else:
+                st.caption("No supplier data in the current view.")
 
     st.write("")
 

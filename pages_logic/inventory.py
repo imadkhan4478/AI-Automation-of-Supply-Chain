@@ -71,6 +71,25 @@ def render():
 
     st.write("")
 
+    # -------------------------------------------------- More insight: reorder risk + lowest stock
+    if len(data):
+        d1, d2 = st.columns(2)
+        with d1:
+            ui.section("Reorder Risk by Branch")
+            risk_by_branch = (
+                data.assign(below=(data["stock_status"] == "Below reorder").astype(int))
+                .groupby("branch", as_index=False)["below"].mean()
+            )
+            risk_by_branch["below"] *= 100
+            risk_by_branch = risk_by_branch.sort_values("below", ascending=False)
+            charts.ranked_bar(risk_by_branch, "branch", "below", height=280)
+        with d2:
+            ui.section("Lowest Stock Items")
+            lowest = data.nsmallest(8, "available_qty")[["item", "available_qty"]]
+            charts.ranked_bar(lowest, "item", "available_qty", height=280)
+
+    st.write("")
+
     # -------------------------------------------------- Real data, on demand
     with st.expander("🔍 View real data / search"):
         search = st.text_input(

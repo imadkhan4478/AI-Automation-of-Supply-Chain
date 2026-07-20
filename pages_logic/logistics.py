@@ -12,6 +12,7 @@ not the other way around) -- Export and Import have genuinely different
 schemas, so the KPI/chart choices differ per kind, not just the labels.
 """
 
+import pandas as pd
 import streamlit as st
 
 from backend import data_access as db
@@ -91,6 +92,27 @@ def _render_export(data):
                     .groupby("customer").size().reset_index(name="shipments")
                     .sort_values("shipments", ascending=False).head(8))
             charts.category_bar(grp2, "customer", "shipments", height=300)
+
+        st.write("")
+        d1, d2 = st.columns(2)
+        with d1:
+            ui.section("Shipments Over Time")
+            trend_src = data.dropna(subset=["sailing_date"])
+            if len(trend_src):
+                by_month = (trend_src.assign(month=pd.to_datetime(trend_src["sailing_date"]).dt.to_period("M").dt.to_timestamp())
+                            .groupby("month", as_index=False).size().rename(columns={"size": "shipments"}))
+                charts.trend_line(by_month, "month", "shipments", height=280)
+            else:
+                st.caption("No sailing dates in the current view yet.")
+        with d2:
+            ui.section("By Payment Term")
+            pt_src = data.dropna(subset=["payment_term"])
+            if len(pt_src):
+                grp3 = (pt_src.groupby("payment_term").size().reset_index(name="shipments")
+                         .sort_values("shipments", ascending=False))
+                charts.category_bar(grp3, "payment_term", "shipments", height=280)
+            else:
+                st.caption("No payment term data in the current view.")
     else:
         st.info("No shipments match the current filter.")
 
@@ -139,5 +161,26 @@ def _render_import(data):
                     .groupby("mode_of_shipment").size().reset_index(name="shipments")
                     .sort_values("shipments", ascending=False))
             charts.category_bar(grp2, "mode_of_shipment", "shipments", height=300)
+
+        st.write("")
+        d1, d2 = st.columns(2)
+        with d1:
+            ui.section("Shipments Over Time")
+            trend_src = data.dropna(subset=["etd"])
+            if len(trend_src):
+                by_month = (trend_src.assign(month=pd.to_datetime(trend_src["etd"]).dt.to_period("M").dt.to_timestamp())
+                            .groupby("month", as_index=False).size().rename(columns={"size": "shipments"}))
+                charts.trend_line(by_month, "month", "shipments", height=280)
+            else:
+                st.caption("No ETD dates in the current view yet.")
+        with d2:
+            ui.section("By Clearance Mode")
+            cm_src = data.dropna(subset=["clearance_mode"])
+            if len(cm_src):
+                grp3 = (cm_src.groupby("clearance_mode").size().reset_index(name="shipments")
+                         .sort_values("shipments", ascending=False))
+                charts.category_bar(grp3, "clearance_mode", "shipments", height=280)
+            else:
+                st.caption("No clearance mode data in the current view.")
     else:
         st.info("No shipments match the current filter.")

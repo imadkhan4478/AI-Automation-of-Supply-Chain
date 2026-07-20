@@ -15,7 +15,6 @@ Run on office LAN: streamlit run app.py --server.address 0.0.0.0
 import os
 
 import streamlit as st
-from streamlit_option_menu import option_menu
 
 from components import ui
 from components.ui import inject_styles
@@ -50,16 +49,26 @@ T.set_mode(st.session_state.get("dark_mode", False))
 inject_styles()
 
 # --- Navigation config (single source of truth) ---
-# To reorder/rename the menu, edit THIS list only.
+# To reorder/rename the menu, edit THIS list only. Icons are Streamlit's
+# built-in Material Symbols (st.button's `icon=` param) -- native, not a
+# third-party component, so the nav renders in the main document and
+# follows our own CSS/dark-mode tokens instead of being stuck inside a
+# custom component's iframe (which only ever sees Streamlit's static
+# .streamlit/config.toml theme -- that was the "sidebar nav stays white
+# in dark mode" bug with streamlit_option_menu; swapping to native
+# buttons removes the iframe entirely rather than patching around it).
 PAGES = {
-    "Dashboard":  ("speedometer2", dashboard.render),
-    "Purchases":  ("cart",          purchases.render),
-    "Inventory":  ("box-seam",      inventory.render),
-    "Imports":    ("airplane",      imports.render),
-    "Logistics":  ("truck",         logistics.render),
-    "Reports":    ("file-earmark-bar-graph", reports.render),
-    "Assistant":  ("chat-dots",     assistant.render),
+    "Dashboard":  (":material/speed:",          dashboard.render),
+    "Purchases":  (":material/shopping_cart:",  purchases.render),
+    "Inventory":  (":material/inventory_2:",    inventory.render),
+    "Imports":    (":material/flight:",         imports.render),
+    "Logistics":  (":material/local_shipping:", logistics.render),
+    "Reports":    (":material/bar_chart:",      reports.render),
+    "Assistant":  (":material/chat:",           assistant.render),
 }
+
+if "current_page" not in st.session_state:
+    st.session_state.current_page = "Dashboard"
 
 with st.sidebar:
     ui.sidebar_logo()
@@ -75,31 +84,15 @@ with st.sidebar:
     with tcol2:
         st.toggle("Dark mode", key="dark_mode")
     st.write("")
-    choice = option_menu(
-        menu_title=None,
-        options=list(PAGES.keys()),
-        icons=[icon for icon, _ in PAGES.values()],
-        default_index=0,
-        styles={
-            "container": {"padding": "0", "background-color": "transparent"},
-            "icon": {"color": T.MUTED, "font-size": "16px"},
-            "nav-link": {
-                "font-size": "15px",
-                "color": T.NAVY,
-                "text-align": "left",
-                "margin": "3px 0",
-                "border-radius": "10px",
-                "--hover-color": T.BRAND_SOFT,
-            },
-            "nav-link-selected": {
-                "background": T.GRADIENT_BRAND,
-                "color": "white",
-                "border-radius": "10px",
-                "box-shadow": "0 4px 12px rgba(79,70,229,.28)",
-            },
-        },
-    )
+    for name, (icon, _) in PAGES.items():
+        is_active = st.session_state.current_page == name
+        if st.button(
+            name, key=f"nav_{name}", icon=icon, width="stretch",
+            type="primary" if is_active else "secondary",
+        ):
+            st.session_state.current_page = name
+            st.rerun()
 
 # --- Route to the selected page ---
-_, render_fn = PAGES[choice]
+_, render_fn = PAGES[st.session_state.current_page]
 render_fn()

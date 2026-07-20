@@ -174,14 +174,19 @@ def inject_styles():
             .st-key-chat_fab {{
                 position:fixed; bottom:28px; right:32px; z-index:999; width:auto;
             }}
-            .st-key-chat_fab [data-testid="stPopover"] > button {{
+            /* The trigger is data-testid="stPopoverButton" wrapping its own
+               <button> -- not a direct child of [data-testid="stPopover"] --
+               so a "> button" combinator never matched it and it fell back
+               to Streamlit's plain (theme-following-nothing) secondary
+               button style, showing as a stray white pill in dark mode. */
+            .st-key-chat_fab [data-testid="stPopoverButton"] button {{
                 background:{T.GRADIENT_BRAND} !important; color:white !important;
                 border:none !important; border-radius:999px !important;
                 padding:12px 22px !important; font-weight:700 !important;
                 box-shadow:0 8px 24px rgba(79,70,229,.4) !important;
                 transition: transform .15s ease, box-shadow .15s ease;
             }}
-            .st-key-chat_fab [data-testid="stPopover"] > button:hover {{
+            .st-key-chat_fab [data-testid="stPopoverButton"] button:hover {{
                 transform: translateY(-2px);
                 box-shadow:0 12px 30px rgba(79,70,229,.5) !important;
             }}
@@ -227,10 +232,32 @@ def inject_styles():
             }}
             [data-testid="stTabs"] [data-baseweb="tab"] {{ color:{T.MUTED}; }}
             [data-testid="stTabs"] [aria-selected="true"] {{ color:{T.BRAND}; }}
-            .stButton > button, .stDownloadButton > button, [data-testid="stFormSubmitButton"] button {{
+            /* scoped to secondary buttons only -- primary buttons (the
+               active sidebar nav item) keep Streamlit's own primaryColor
+               styling, which is mode-independent (BRAND is a fixed accent,
+               not a light/dark token), so overriding it here would wipe
+               out the "selected page" highlight. */
+            [data-testid="stBaseButton-secondary"], [data-testid="stFormSubmitButton"] button,
+            .stDownloadButton > button {{
                 background:{T.SURFACE}; color:{T.INK}; border:1px solid {T.LINE};
             }}
             [data-testid="stDataFrame"] {{ border:1px solid {T.LINE}; border-radius:10px; overflow:hidden; }}
+
+            /* ---------- sidebar nav (native st.button, one per page) ---------- */
+            [data-testid="stSidebar"] .stButton > button {{
+                justify-content:flex-start; text-align:left; border-radius:10px;
+                font-weight:600; margin:2px 0; padding:8px 14px;
+            }}
+            [data-testid="stSidebar"] [data-testid="stBaseButton-secondary"] {{
+                background:transparent !important; border:1px solid transparent !important; color:{T.NAVY} !important;
+            }}
+            [data-testid="stSidebar"] [data-testid="stBaseButton-secondary"]:hover {{
+                background:{T.BRAND_SOFT} !important; color:{T.BRAND} !important;
+            }}
+            [data-testid="stSidebar"] [data-testid="stBaseButton-primary"] {{
+                background:{T.GRADIENT_BRAND} !important; border:none !important;
+                box-shadow:0 4px 12px rgba(79,70,229,.28);
+            }}
         </style>
         """,
         unsafe_allow_html=True,

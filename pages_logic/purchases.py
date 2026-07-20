@@ -5,6 +5,7 @@ recomputed from the same filtered DataFrame, so it's live to whatever
 status/supplier is picked -- no separate query path to keep in sync.
 """
 
+import pandas as pd
 import streamlit as st
 
 from backend import data_access as db
@@ -69,6 +70,34 @@ def render():
             charts.ranked_bar(by_supplier, "supplier", "amount", height=300)
     else:
         st.info("No orders match the current filter.")
+
+    st.write("")
+
+    # -------------------------------------------------- More insight: trend + overdue aging
+    if len(data):
+        trend_src = data.dropna(subset=["purchase_date"])
+        delayed_src = data[data["status"] == "Delayed"].dropna(subset=["purchase_date", "required_date"])
+        d1, d2 = st.columns(2)
+        with d1:
+            ui.section("Order Value Trend (by month)")
+            if len(trend_src):
+                by_month = (trend_src.assign(month=pd.to_datetime(trend_src["purchase_date"]).dt.to_period("M").dt.to_timestamp())
+                            .groupby("month", as_index=False)["amount"].sum())
+                charts.trend_line(by_month, "month", "amount", height=280)
+            else:
+                st.caption("No purchase dates in the current view yet.")
+        with d2:
+            ui.section("Delayed Orders — Days Overdue")
+            if len(delayed_src):
+                overdue_days = (pd.to_datetime(delayed_src["purchase_date"]) - pd.to_datetime(delayed_src["required_date"])).dt.days
+                buckets = pd.cut(overdue_days, [-1, 30, 60, 90, 10_000],
+                                  labels=["0-30 days", "31-60 days", "61-90 days", "90+ days"])
+                by_bucket = buckets.value_counts().reindex(
+                    ["0-30 days", "31-60 days", "61-90 days", "90+ days"]).reset_index()
+                by_bucket.columns = ["bucket", "orders"]
+                charts.aging_buckets(by_bucket, "bucket", "orders", height=280)
+            else:
+                st.caption("No delayed orders in the current view.")
 
     st.write("")
 
