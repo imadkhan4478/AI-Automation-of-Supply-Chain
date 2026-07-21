@@ -100,7 +100,7 @@ MODULE_ICONS = {
 # backend/data_access.py) until the business confirms real terminal states.
 _STATUS_ROLES = {
     "delayed": "risk", "pending clearance": "risk", "below reorder": "risk",
-    "critical": "risk", "order cancelled": "risk",
+    "out of stock": "risk", "critical": "risk", "order cancelled": "risk",
     "pending": "watch", "in transit": "watch", "watch": "watch",
     "under production": "watch", "ready awaiting sailing": "watch",
     "under custom clearance": "watch", "costing in process": "watch",
