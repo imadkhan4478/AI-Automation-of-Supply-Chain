@@ -31,7 +31,11 @@ def purchase_trend():
 
     NOTE: the current extract only spans ~2 months (see purchases.purchase
     min/max), so this may show as few as 2 points until more history
-    accumulates in the database. That's the real data, not a bug.
+    accumulates in the database. That's the real data, not a bug -- but the
+    most recent month WILL be a partial-period total until the extract
+    catches up to the calendar; see ui.partial_period_note(), which the
+    caller pairs with purchases_asof() to flag that on the chart rather
+    than let it silently read as a decline.
     """
     query = text("""
         SELECT
@@ -43,6 +47,13 @@ def purchase_trend():
         ORDER BY DATE_TRUNC('month', purchase)
     """)
     return pd.read_sql(query, get_engine())
+
+
+def purchases_asof():
+    """Real max purchase date currently in the data."""
+    df = pd.read_sql(text("SELECT MAX(purchase) AS d FROM public.purchases_data WHERE purchase IS NOT NULL"),
+                      get_engine())
+    return df.iloc[0]["d"]
 
 
 def weekly_trend():

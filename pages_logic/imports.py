@@ -82,6 +82,9 @@ def render():
                 by_month = (trend_src.assign(month=pd.to_datetime(trend_src["demand_date"]).dt.to_period("M").dt.to_timestamp())
                             .groupby("month", as_index=False)["total_value_pkr"].sum())
                 charts.trend_line(by_month, "month", "total_value_pkr", height=280)
+                note = ui.partial_period_note(pd.to_datetime(trend_src["demand_date"]).max())
+                if note:
+                    st.caption(note)
             else:
                 st.caption("No demand dates in the current view yet.")
         with d2:

@@ -452,6 +452,30 @@ def money(value):
     return f"PKR {value:,.0f}"
 
 
+def partial_period_note(asof_date, base_caption=""):
+    """Caption for a month-grouped trend chart, flagging when the most
+    recent month is still in progress.
+
+    A monthly trend built by grouping real dates naturally ends at
+    whatever date the extract happens to stop on -- if that's the 9th of
+    the month, that month's bar/point is a 9-day total sitting next to
+    full 30-day ones, and reads as a steep decline that isn't real. This
+    doesn't correct or exclude that data (which would be inventing
+    numbers); it makes the true story visible so the chart can't be
+    misread as a business trend when it's actually a data-cutoff artifact.
+    Returns `base_caption` unchanged if `asof_date` is the real end of its
+    month, or None was passed (no real date to check).
+    """
+    import calendar
+    if asof_date is None:
+        return base_caption
+    last_day = calendar.monthrange(asof_date.year, asof_date.month)[1]
+    if asof_date.day >= last_day:
+        return base_caption
+    note = f"Data through {asof_date:%b %d, %Y} — the most recent month is still in progress, not a full-month total."
+    return f"{base_caption} ({note})" if base_caption else note
+
+
 # ======================================================================
 #  BRANDING  (real Qadri logo)
 # ======================================================================
