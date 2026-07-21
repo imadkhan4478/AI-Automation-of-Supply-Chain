@@ -101,12 +101,16 @@ MODULE_ICONS = {
 _STATUS_ROLES = {
     "delayed": "risk", "pending clearance": "risk", "below reorder": "risk",
     "out of stock": "risk", "critical": "risk", "order cancelled": "risk",
+    "incomplete": "risk",
     "pending": "watch", "in transit": "watch", "watch": "watch",
     "under production": "watch", "ready awaiting sailing": "watch",
     "under custom clearance": "watch", "costing in process": "watch",
     "lc in process": "watch", "t/t in process": "watch", "under de-stuffing": "watch",
+    "sailing": "watch", "at qfl": "watch", "at port": "watch",
+    "pending packing": "watch", "in progress": "watch", "near complete": "watch",
     "completed": "healthy", "cleared": "healthy", "ok": "healthy", "delivered": "healthy",
     "healthy": "healthy", "arrived at works": "healthy", "arrived at qfl": "healthy",
+    "complete": "healthy",
 }
 
 # --- The two palettes ---

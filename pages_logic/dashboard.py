@@ -63,7 +63,7 @@ def render():
     with left:
         ui.section("Purchase Value Trend")
         charts.trend_line(db.purchase_trend(), x="month", y="purchase_value_m")
-        st.caption(ui.partial_period_note(db.purchases_asof(), "PKR millions per month"))
+        st.caption(ui.excluded_month_note(db.purchases_asof(), "PKR millions per month"))
     with right:
         ui.section("Attention Required")
         for a in db.alerts():

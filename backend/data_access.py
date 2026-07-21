@@ -30,12 +30,11 @@ def purchase_trend():
     """Real monthly purchase value (PKR millions) from purchases_data.
 
     NOTE: the current extract only spans ~2 months (see purchases.purchase
-    min/max), so this may show as few as 2 points until more history
-    accumulates in the database. That's the real data, not a bug -- but the
-    most recent month WILL be a partial-period total until the extract
-    catches up to the calendar; see ui.partial_period_note(), which the
-    caller pairs with purchases_asof() to flag that on the chart rather
-    than let it silently read as a decline.
+    min/max), so this may show as few as 1-2 points until more history
+    accumulates. The trailing month is dropped here if it's still in
+    progress (see ui.exclude_partial_month) -- a 9-day total sitting next
+    to a full month reads as a decline that isn't real. Pair with
+    purchases_asof() + ui.excluded_month_note() for the matching caption.
     """
     query = text("""
         SELECT
@@ -46,7 +45,21 @@ def purchase_trend():
         GROUP BY DATE_TRUNC('month', purchase)
         ORDER BY DATE_TRUNC('month', purchase)
     """)
-    return pd.read_sql(query, get_engine())
+    df = pd.read_sql(query, get_engine())
+    asof = purchases_asof()
+    if asof is not None and len(df):
+        import calendar
+        last_day = calendar.monthrange(asof.year, asof.month)[1]
+        if asof.day < last_day:
+            # Compare against the TO_CHAR label (computed server-side, so
+            # immune to a real quirk hit here: reading DATE_TRUNC's raw
+            # TIMESTAMP back through this driver/pandas comes back
+            # tz-shifted -- e.g. "Jun 2026"'s own month_start value lands
+            # on 2026-05-31 once made tz-naive, one calendar month off. The
+            # text label was never affected, so match on that instead of
+            # trying to compare a mis-shifted timestamp.
+            df = df[df["month"] != asof.strftime("%b %Y")]
+    return df.reset_index(drop=True)
 
 
 def purchases_asof():
@@ -336,79 +349,206 @@ def imports_status_list():
 
 
 
-# --- Logistics -------------------------------------------------------
-def logistics(kind="Export"):
-    """Real data: export shipments (public.exports) or import shipments
-    (public.shipment_details), depending on `kind`.
- 
-    Both branches return a DataFrame with a derived `status` column so the
-    Logistics page can colour-code rows the same way for either view.
- 
-    Status rules are PLACEHOLDERS (like stock's reorder rule) until the
-    business confirms real definitions:
-      - Export : 'Completed' when handed_over_to is filled, else 'Pending'.
-      - Import : 'Cleared' when gate_out is set, else 'In Transit' when an
-                 eta_final exists, else 'Pending Clearance'.
- 
-    Note: richer logistics metrics (transit days, cost/kg, packing on-time,
-    documentation completion %) are available later from the pre-built views
-    v_shipment_metrics / v_packing_metrics / v_shifting_metrics /
-    v_documentation_completion — wire those in during customization.
+# --- Logistics ---------------------------------------------------------
+# Export-only (2026-07-21): Logistics covers the export shipping pipeline --
+# shipments, packing, inland transport/shifting, documentation -- NOT
+# imports. Import shipment tracking already has its own tab (Imports,
+# import_details); Logistics' four views below map to the business's own
+# stages: export_shipments, packing_details, shifting_movements,
+# export_documents (+ exports as the shipment header).
+#
+# Several of the pre-built metric views mentioned in earlier notes turned
+# out to have real data-quality problems on inspection (2026-07-21) --
+# NOT used here, and flagged rather than silently charted:
+#   - v_shifting_metrics.transit_days: every value is around -20,500 (a
+#     ~56-year negative offset) -- clearly a broken calculation upstream.
+#   - v_shipment_metrics.transit_days: always exactly 0 across all 120
+#     non-null rows -- looks like a same-value bug, not real transit time.
+#   - v_packing_metrics: on_time_packing (and every other metric column)
+#     is NULL on 100% of its 1,375 rows -- the view appears to never
+#     populate. packing_details.target_packing_date is also 100% NULL, so
+#     "on-time packing" can't be derived here either; used target_rfd /
+#     actual_rfd_date instead (real coverage: 490 / 641 of 1,375 rows).
+# v_shipment_metrics.total_logistics_cost/cost_per_kg and
+# v_shifting_metrics.savings_rs DID check out as real, sane values and are
+# used below.
+def logistics_shipments(status="All"):
+    """Real data: export shipments (public.export_shipments), the shipment-
+    batch grain (165 rows -- a handful of exports have 2+ batches, so this
+    is finer-grained than `exports` itself). LEFT JOINs exports for
+    customer/agent context and v_shipment_metrics for real cost fields.
+
+    50 of 165 rows have no export_id yet (shipment tracked before a formal
+    export record exists) -- kept via LEFT JOIN rather than dropped, since
+    that's real, current pipeline state, not bad data.
     """
-    engine = get_engine()
- 
-    if kind == "Import":
-        query = text("""
-            SELECT
-                bl_no,
-                pol,
-                pod,
-                mode_of_shipment,
-                s_line,
-                local_agent,
-                total_value_pkr_batch_wise,
-                etd,
-                eta_final,
-                transit_time,
-                gate_out,
-                clearance_mode
-            FROM public.shipment_details
-            ORDER BY eta_final DESC NULLS LAST
-        """)
-        df = pd.read_sql(query, engine)
- 
-        def _imp_status(row):
-            if pd.notna(row["gate_out"]):
-                return "Cleared"
-            if pd.notna(row["eta_final"]):
-                return "In Transit"
-            return "Pending Clearance"
- 
-        df["status"] = df.apply(_imp_status, axis=1) if len(df) else []
-        return df
- 
-    # Default: Export
     query = text("""
         SELECT
-            exp_no,
-            customer,
-            shipping_agent,
-            bl_type,
-            payment_term,
-            sailing_date,
-            gate_out_date,
-            handed_over_to
-        FROM public.exports
-        ORDER BY sailing_date DESC NULLS LAST
+            es.shipment_id, es.export_id,
+            e.exp_no, e.customer, e.shipping_agent, e.payment_term,
+            es.country, es.pod, es.shipment_stage, es.shipment_status,
+            es.net_weight_kgs, es.gross_weight_kgs,
+            es.s_agent, es.c_agent, es.s_line,
+            es.port_in_date, es.actual_arrival_date, es.cut_off_date,
+            es.quoted_sea_freight, es.actual_sea_freight, es.clearance_cost,
+            vm.total_logistics_cost, vm.cost_per_kg,
+            COALESCE(es.shipment_status, 'Unknown') AS status
+        FROM public.export_shipments es
+        LEFT JOIN public.exports e ON e.export_id = es.export_id
+        LEFT JOIN public.v_shipment_metrics vm ON vm.shipment_id = es.shipment_id
+        ORDER BY es.shipment_id DESC
     """)
-    df = pd.read_sql(query, engine)
-    df["status"] = (
-        df["handed_over_to"].apply(
-            lambda v: "Completed" if pd.notna(v) and str(v).strip() != "" else "Pending"
-        )
-        if len(df) else []
-    )
+    df = pd.read_sql(query, get_engine())
+    if status != "All":
+        df = df[df["status"] == status].reset_index(drop=True)
     return df
+
+
+def logistics_shipment_status_list():
+    query = text("""
+        SELECT DISTINCT COALESCE(shipment_status, 'Unknown') AS status
+        FROM public.export_shipments ORDER BY 1
+    """)
+    df = pd.read_sql(query, get_engine())
+    return ["All"] + df["status"].tolist()
+
+
+def logistics_packing(status="All"):
+    """Real data: packing_details (1,375 rows). `status` uses
+    `overall_status` (clean: 'Pending Packing' / 'In Progress' only) rather
+    than the richer but messy `packing_status` free-text field (real values
+    include inconsistent case/spacing like 'Gate Out' vs 'Gate out' vs
+    'Gateout', and a couple of rows where the source data literally has a
+    date string in that column) -- packing_status is still returned as a
+    raw column for the search table, just not used to drive the filter.
+
+    rfd_delay_days (actual_rfd_date - target_rfd) is computed here from
+    real dates; target_packing_date is 100% NULL in the source so an
+    "on-time packing" metric can't be derived at all yet.
+    """
+    query = text("""
+        SELECT
+            packing_id, export_id, exp_batch_raw, business_type, product_category,
+            customer_type, customer, jobs_no, qty, qty_uom, pkgs,
+            net_weight_kgs, gross_weight_kgs,
+            actual_packing_date, target_rfd, actual_rfd_date,
+            packing_status, overall_status,
+            quoted_packing_cost, actual_packing_cost,
+            COALESCE(overall_status, 'Unknown') AS status
+        FROM public.packing_details
+        ORDER BY packing_id DESC
+    """)
+    df = pd.read_sql(query, get_engine())
+    df["rfd_delay_days"] = (pd.to_datetime(df["actual_rfd_date"]) - pd.to_datetime(df["target_rfd"])).dt.days
+    if status != "All":
+        df = df[df["status"] == status].reset_index(drop=True)
+    return df
+
+
+def logistics_packing_status_list():
+    query = text("""
+        SELECT DISTINCT COALESCE(overall_status, 'Unknown') AS status
+        FROM public.packing_details ORDER BY 1
+    """)
+    df = pd.read_sql(query, get_engine())
+    return ["All"] + df["status"].tolist()
+
+
+def logistics_shifting(status="All"):
+    """Real data: shifting_movements (464 rows) -- inland transport/
+    dispatch. `status` uses `operational_status`, filled to 'In Progress'
+    where NULL (218/464 rows): the real column has only 'Delivered' as a
+    populated value, with no other real label for "not yet delivered" --
+    same spirit as other placeholder fills in this module, documented
+    rather than left as a silent gap. `tracking_status` mirrors
+    `operational_status` exactly in the source, so isn't duplicated here.
+
+    v_shifting_metrics.savings_rs is included (checked sane: real spread,
+    -195,900 to 328,600); its transit_days and savings_pct columns are
+    NOT included -- see the module-level note above for why.
+    """
+    query = text("""
+        SELECT
+            s.shifting_id, s.export_id, s.movement_type, s.execution_date, s.customer,
+            s.item_name, s.pickup_point, s.destination, s.province, s.transporter,
+            s.gross_weight_kgs, s.vehicle_type, s.no_of_vehicles,
+            s.containers_20ft, s.containers_40ft,
+            s.actual_freight_rs, s.quoted_freight_rs,
+            s.payment_status, s.tracking_status,
+            vm.savings_rs,
+            COALESCE(s.operational_status, 'In Progress') AS status
+        FROM public.shifting_movements s
+        LEFT JOIN public.v_shifting_metrics vm ON vm.shifting_id = s.shifting_id
+        ORDER BY s.shifting_id DESC
+    """)
+    df = pd.read_sql(query, get_engine())
+    if status != "All":
+        df = df[df["status"] == status].reset_index(drop=True)
+    return df
+
+
+def logistics_shifting_status_list():
+    query = text("""
+        SELECT DISTINCT COALESCE(operational_status, 'In Progress') AS status
+        FROM public.shifting_movements ORDER BY 1
+    """)
+    df = pd.read_sql(query, get_engine())
+    return ["All"] + df["status"].tolist()
+
+
+def logistics_documentation(status="All"):
+    """Real data: v_documentation_completion (163 rows, one per export --
+    this view DID check out: real varying completion percentages, unlike
+    v_packing_metrics). `status` is derived from completion_pct with
+    placeholder thresholds (same spirit as the delay/reorder rules
+    elsewhere in this module) until the business defines real bands:
+    >=95% Complete, >=70% Near Complete, else Incomplete.
+    """
+    query = text("""
+        SELECT
+            export_id, exp_no, batch_no, total_documents, completed_documents,
+            pending_documents, completion_pct, customs_completion_pct,
+            customer_completion_pct, bank_completion_pct,
+            missing_customs_documents, missing_customer_documents, missing_bank_documents
+        FROM public.v_documentation_completion
+        ORDER BY export_id DESC
+    """)
+    df = pd.read_sql(query, get_engine())
+
+    def _doc_status(pct):
+        if pd.isna(pct):
+            return "Unknown"
+        if pct >= 95:
+            return "Complete"
+        if pct >= 70:
+            return "Near Complete"
+        return "Incomplete"
+
+    df["status"] = df["completion_pct"].apply(_doc_status)
+    if status != "All":
+        df = df[df["status"] == status].reset_index(drop=True)
+    return df
+
+
+def logistics_documentation_status_list():
+    return ["All", "Complete", "Near Complete", "Incomplete", "Unknown"]
+
+
+def logistics_document_types():
+    """Real line-item document tracking (export_documents, 3,053 rows) --
+    document_type x status breakdown. Not filtered by the Documentation
+    view's export-level status picker (this is a different grain: one
+    export has many documents); the page captions it as covering all
+    exports so it isn't misread as scoped to the current filter.
+    """
+    query = text("""
+        SELECT document_type, status, COUNT(*) AS n
+        FROM public.export_documents
+        WHERE document_type IS NOT NULL
+        GROUP BY document_type, status
+    """)
+    return pd.read_sql(query, get_engine())
+
 
 # --- Assistant -------------------------------------------------------
 def ask_assistant(question):

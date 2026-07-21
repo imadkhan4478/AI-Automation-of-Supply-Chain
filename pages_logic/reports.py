@@ -23,25 +23,22 @@ from components import ui, charts
 
 
 # Map each source to its loader, its natural status column (for row coloring),
-# and its primary date column (for the quick date-range filter). "Logistics"'s
-# status_col was "shipment_status" here but the connected logistics() function
-# names the real column "status" (a leftover from the old stub, which used a
-# different name) -- fixed, since it silently broke row coloring on that report.
+# and its primary date column (for the quick date-range filter).
 #
-# "Logistics" used to be one source backed by db.logistics(), which defaults
-# to kind="Export" -- there was no control here to switch it, so Import
-# shipments (public.shipment_details, 451 real rows) were completely
-# unreachable from the report builder even though the Logistics *page*
-# lets you view either. Export and Import are genuinely different schemas
-# (different status values, different date column), so this is split into
-# two sources rather than bolted on as a third selector -- consistent with
-# how the Logistics page itself treats them as separate views.
+# Logistics (2026-07-21): the page itself is export-only now -- it maps to
+# the business's own export pipeline stages (shipments/packing/transport/
+# documentation), each its own real table, not an Export/Import toggle.
+# Import shipment tracking belongs to the "Imports" source above
+# (import_details) instead. Mirrors the Logistics page's four views exactly
+# so the report builder can never see anything the page itself can't.
 SOURCES = {
-    "Purchases":         {"loader": lambda: db.purchases(), "status_col": "status", "date_col": "purchase_date"},
-    "Inventory":         {"loader": lambda: db.stock(),     "status_col": "stock_status", "date_col": None},
-    "Imports":           {"loader": lambda: db.imports(),   "status_col": "current_status", "date_col": "demand_date"},
-    "Logistics — Export": {"loader": lambda: db.logistics(kind="Export"), "status_col": "status", "date_col": "sailing_date"},
-    "Logistics — Import": {"loader": lambda: db.logistics(kind="Import"), "status_col": "status", "date_col": "etd"},
+    "Purchases":               {"loader": lambda: db.purchases(), "status_col": "status", "date_col": "purchase_date"},
+    "Inventory":               {"loader": lambda: db.stock(),     "status_col": "stock_status", "date_col": None},
+    "Imports":                 {"loader": lambda: db.imports(),   "status_col": "current_status", "date_col": "demand_date"},
+    "Logistics — Shipments":    {"loader": lambda: db.logistics_shipments(), "status_col": "status", "date_col": "port_in_date"},
+    "Logistics — Packing":      {"loader": lambda: db.logistics_packing(), "status_col": "status", "date_col": "actual_rfd_date"},
+    "Logistics — Transport":    {"loader": lambda: db.logistics_shifting(), "status_col": "status", "date_col": "execution_date"},
+    "Logistics — Documentation": {"loader": lambda: db.logistics_documentation(), "status_col": "status", "date_col": None},
 }
 
 _AGG_FUNCS = {"Sum": "sum", "Average": "mean", "Count": "count"}

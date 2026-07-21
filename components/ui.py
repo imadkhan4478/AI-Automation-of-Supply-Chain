@@ -452,19 +452,11 @@ def money(value):
     return f"PKR {value:,.0f}"
 
 
-def partial_period_note(asof_date, base_caption=""):
-    """Caption for a month-grouped trend chart, flagging when the most
-    recent month is still in progress.
-
-    A monthly trend built by grouping real dates naturally ends at
-    whatever date the extract happens to stop on -- if that's the 9th of
-    the month, that month's bar/point is a 9-day total sitting next to
-    full 30-day ones, and reads as a steep decline that isn't real. This
-    doesn't correct or exclude that data (which would be inventing
-    numbers); it makes the true story visible so the chart can't be
-    misread as a business trend when it's actually a data-cutoff artifact.
+def excluded_month_note(asof_date, base_caption=""):
+    """Caption to pair with a monthly trend chart that has ALREADY dropped
+    its trailing in-progress month (see exclude_partial_month below).
     Returns `base_caption` unchanged if `asof_date` is the real end of its
-    month, or None was passed (no real date to check).
+    month (nothing was dropped), or None was passed.
     """
     import calendar
     if asof_date is None:
@@ -472,8 +464,34 @@ def partial_period_note(asof_date, base_caption=""):
     last_day = calendar.monthrange(asof_date.year, asof_date.month)[1]
     if asof_date.day >= last_day:
         return base_caption
-    note = f"Data through {asof_date:%b %d, %Y} — the most recent month is still in progress, not a full-month total."
+    note = (f"Showing complete months only — {asof_date:%B %Y} will appear once "
+            f"finished (data through {asof_date:%b %d, %Y}).")
     return f"{base_caption} ({note})" if base_caption else note
+
+
+def exclude_partial_month(df, date_col):
+    """Drop rows in the trailing calendar month if that month is still in
+    progress, so a month-grouped trend chart only ever shows complete
+    months (rather than a still-filling-up month next to full ones, which
+    reads as a decline that isn't real -- see excluded_month_note above
+    for the matching caption).
+
+    Doesn't invent what the dropped month "would" total -- it's just not
+    shown yet. Returns (filtered_df, asof_date) so the caller can pass
+    asof_date straight to excluded_month_note() for the caption; asof_date
+    is None (nothing dropped) when df is empty or its latest month is
+    already complete.
+    """
+    import calendar
+    if df.empty:
+        return df, None
+    dates = pd.to_datetime(df[date_col])
+    asof = dates.max()
+    last_day = calendar.monthrange(asof.year, asof.month)[1]
+    if asof.day >= last_day:
+        return df, None
+    cutoff = asof.replace(day=1)
+    return df[dates < cutoff], asof
 
 
 # ======================================================================
