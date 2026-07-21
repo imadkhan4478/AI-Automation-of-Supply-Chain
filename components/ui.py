@@ -33,7 +33,13 @@ def inject_styles():
         f"""
         <style>
             .stApp {{ background: {T.CANVAS}; }}
-            .block-container {{ padding-top: 2rem; padding-bottom: 2rem; max-width: 1400px;
+            /* padding-bottom reserves a safe zone under the last row of real
+               content -- the floating chat FAB below sits fixed at the
+               bottom-right, so without this, scrolling to the end of a page
+               (e.g. the Reports export buttons, or a page's last chart row)
+               puts real, clickable content directly underneath a
+               fixed-position element and the FAB intercepts the click. */
+            .block-container {{ padding-top: 2rem; padding-bottom: 6rem; max-width: 1400px;
                                 animation: fadeUp .5s ease; }}
             html, body, [class*="css"] {{ font-family: {T.FONT_STACK}; }}
 
@@ -181,12 +187,22 @@ def inject_styles():
                the trigger fell back to Streamlit's plain secondary-button
                style, showing as a white pill that only got a faint tint on
                Streamlit's own default hover. Matching both possible shapes
-               here so this keeps working regardless of the exact DOM. */
+               here so this keeps working regardless of the exact DOM.
+
+               Shrunk to a round icon-only button (was a wide text pill):
+               a wide fixed-position trigger sitting over the page's bottom-
+               right corner could land on top of real buttons there once
+               the page was scrolled -- e.g. Reports' export row. A small
+               56px circle (standard chat-widget shape) leaves far less of
+               the page it can ever sit over; the block-container bottom
+               padding above covers the rest. */
             .st-key-chat_fab [data-testid="stPopoverButton"],
             .st-key-chat_fab [data-testid="stPopoverButton"] button {{
                 background:{T.GRADIENT_BRAND} !important; color:white !important;
-                border:none !important; border-radius:999px !important;
-                padding:12px 22px !important; font-weight:700 !important;
+                border:none !important; border-radius:50% !important;
+                width:56px !important; height:56px !important; min-width:56px !important;
+                padding:0 !important; font-size:1.4rem !important;
+                display:flex !important; align-items:center !important; justify-content:center !important;
                 box-shadow:0 8px 24px rgba(79,70,229,.4) !important;
                 transition: transform .15s ease, box-shadow .15s ease;
             }}
@@ -534,7 +550,11 @@ def chat_popover(on_ask, history_limit=6):
 
     avatar = qadri_avatar_svg(30)
     with st.container(key="chat_fab"):
-        with st.popover("💬 Ask QadriBot", width=380):
+        # Icon-only trigger (was "💬 Ask QadriBot" text) to match the
+        # smaller round FAB shape -- the panel's own header (below)
+        # introduces QadriBot once opened, so the label isn't needed on
+        # the trigger itself; the tooltip covers discoverability.
+        with st.popover("💬", width=380, help="Ask QadriBot"):
             _html_block(f"""
                 <div style="margin:-1rem -1rem 12px -1rem; padding:16px 18px;
                             background:{T.GRADIENT_BRAND}; border-radius:12px 12px 0 0;
