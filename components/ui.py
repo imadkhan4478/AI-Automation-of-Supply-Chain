@@ -413,7 +413,12 @@ def styled_table(df, status_col=None, height=None):
     if status_col and status_col in df.columns:
         def _row_style(row):
             fg, bg = T.status_colors(row[status_col])
-            return [f"background-color:{bg}"] * len(row)
+            # background-color alone left text at st.dataframe's own default
+            # (static, theme-driven) color -- fine against the light-mode
+            # pastel backgrounds, but against the dark-mode backgrounds that
+            # default stayed dark too, reading as barely-visible ghost text.
+            # Pinning color explicitly makes every row legible in both modes.
+            return [f"background-color:{bg};color:{T.INK}"] * len(row)
         styler = df.style.apply(_row_style, axis=1)
         st.dataframe(styler, width="stretch", hide_index=True, height=height)
     else:

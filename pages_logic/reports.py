@@ -105,13 +105,22 @@ def render():
 
     # -------------------------------------------------- 3. Columns
     ui.section("3 · Select columns to include")
+    col_key = f"columns_{source}"
+    sa1, sa2, sa3 = st.columns([1, 1, 6])
+    with sa1:
+        if st.button("Select all", key=f"select_all_{source}", width="stretch"):
+            st.session_state[col_key] = all_cols
+    with sa2:
+        if st.button("Clear", key=f"clear_cols_{source}", width="stretch"):
+            st.session_state[col_key] = []
     chosen_cols = st.multiselect(
-        "Columns", all_cols, default=all_cols, label_visibility="collapsed",
-        help="Pick any combination of columns for your report.",
-        key=f"columns_{source}",
+        "Columns", all_cols, default=[], label_visibility="collapsed",
+        help="Pick any combination of columns for your report — nothing is "
+             "pre-selected, so the report starts from a blank slate.",
+        key=col_key,
     )
     if not chosen_cols:
-        st.info("Select at least one column to build your report.")
+        st.info("Select at least one column to build your report (or click \"Select all\" above).")
         return
 
     # -------------------------------------------------- 4. Advanced filters (any column)
