@@ -88,9 +88,12 @@ def alerts():
         out.append({"level": "high", "message": f"{len(late)} supplier(s) chronically late (on-time < 70%): {names}"})
 
     stock_df = stock()
-    n_risk = int((stock_df["stock_status"] == "Out of Stock").sum())
-    if n_risk:
-        out.append({"level": "high", "message": f"{n_risk} items out of stock"})
+    n_oos = int((stock_df["stock_status"] == "Out of Stock").sum())
+    if n_oos:
+        out.append({"level": "high", "message": f"{n_oos} items out of stock"})
+    n_below = int((stock_df["stock_status"] == "Below Reorder").sum())
+    if n_below:
+        out.append({"level": "medium", "message": f"{n_below} items below their reorder level"})
 
     this_month = pd.read_sql(text("""
         SELECT COUNT(*) AS n
@@ -173,35 +176,33 @@ def supplier_list():
 # --- Inventory -------------------------------------------------------
 def stock(status="All"):
     """Real data: current stock joined to item names, with a computed status
-    and a real (not fabricated) usage-velocity metric.
+    and a real (not fabricated) reorder formula.
 
     The stock table has no item name (it's in `items`) and no stored status,
     so we join for the name and derive `stock_status` here. This keeps the
     return shape identical to what the Inventory page expects, so the page
     does not change.
 
-    Status tiers:
-      - 'Out of Stock': available_qty <= 0. This is not a placeholder -- zero
-        available quantity unambiguously means out of stock.
-      - 'Below Reorder': NOT YET IMPLEMENTED. The business's real formula
-        (confirmed 2026-07-21) is:
-            safety_stock  = (issuance_3m / 90) * safety_days
-            reorder_level = (issuance_3m / 90) * lead_time_days + safety_stock
-        `issuance_3m` is computable now (public.issuance, real data below).
-        `safety_days` and `lead_time_days` are NOT in the database anywhere
-        (checked every table) -- they're per-item planning parameters that
-        need a source (a column to add + populate, or an existing sheet to
-        import). Until that exists, every in-stock item reports 'OK' rather
-        than guessing at a threshold with no data behind it.
-      - 'OK': everything else, for now.
+    Status tiers, business's real formula (confirmed 2026-07-21, and matches
+    what the teammate's own chatbot backend documents independently):
+        avg_daily_issuance = issuance_3m / 90
+        safety_stock  = avg_daily_issuance * safety_days
+        reorder_level = avg_daily_issuance * (lead_time_days + safety_days)
+      - 'Out of Stock': available_qty <= 0.
+      - 'Below Reorder': 0 < available_qty < reorder_level.
+      - 'OK': everything else.
+    `safety_days` / `lead_time_days` come from `ab_items` (item_code +
+    branch_name, provided by the business 2026-07-21 -- not every item has
+    a row here, ~91% coverage against `stock` at load time). Where an item
+    has no ab_items row, reorder_level is left NaN rather than guessed at,
+    so it can only ever land in Out of Stock / OK, same as before this
+    formula existed -- no item is silently misclassified.
 
-    `avg_daily_issuance` / `days_of_stock` ARE real and available today,
-    computed from actual issuance history (public.issuance, item_code +
-    branch), not fabricated -- `days_of_stock` is NaN where an item has no
+    `avg_daily_issuance` / `days_of_stock` (available_qty / avg_daily_issuance)
+    are both real, computed from actual issuance history (public.issuance,
+    item_code + branch) -- `days_of_stock` is NaN where an item has no
     recent issuance to estimate a runway from (honest, not a missing-data
-    bug). The current extract only spans ~2 months of issuance history, so
-    "3m" here is "however much of the last 90 days actually has data" --
-    same thin-extract-degrades-gracefully pattern as weekly_trend().
+    bug).
     """
     query = text("""
         WITH issuance_3m AS (
@@ -217,17 +218,31 @@ def stock(status="All"):
             s.stock_qty,
             s.available_qty,
             iss.issuance_3m_qty,
-            CASE WHEN s.available_qty <= 0 THEN 'Out of Stock'
-                 ELSE 'OK' END AS stock_status
+            ab.safety_days,
+            ab.lead_time_days
         FROM public.stock s
         LEFT JOIN public.items i ON i.item_code = s.item_code
         LEFT JOIN issuance_3m iss ON iss.item_code = s.item_code AND iss.branch = s.branch
+        LEFT JOIN public.ab_items ab ON ab.item_code = s.item_code AND ab.branch_name = s.branch
         ORDER BY s.item_code
     """)
     df = pd.read_sql(query, get_engine())
+
     df["avg_daily_issuance"] = df["issuance_3m_qty"] / 90
     df["days_of_stock"] = df["available_qty"] / df["avg_daily_issuance"]
     df.loc[~pd.notna(df["avg_daily_issuance"]) | (df["avg_daily_issuance"] == 0), "days_of_stock"] = pd.NA
+
+    df["safety_stock"] = df["avg_daily_issuance"] * df["safety_days"]
+    df["reorder_level"] = df["avg_daily_issuance"] * (df["lead_time_days"] + df["safety_days"])
+
+    def _status(row):
+        if row["available_qty"] <= 0:
+            return "Out of Stock"
+        if pd.notna(row["reorder_level"]) and row["available_qty"] < row["reorder_level"]:
+            return "Below Reorder"
+        return "OK"
+
+    df["stock_status"] = df.apply(_status, axis=1)
 
     if status != "All":
         df = df[df["stock_status"] == status].reset_index(drop=True)
@@ -437,9 +452,12 @@ def dashboard_kpis_rich():
     cycle_delta = _pct_delta(cur["avg_cycle_days"], prev["avg_cycle_days"] if prev is not None else None)
     on_time_delta = _pct_delta(cur_on_time, prev_on_time)
 
-    # items_at_risk: reuses the already-connected stock() query.
+    # items_at_risk: reuses the already-connected stock() query. Now that
+    # 'Below Reorder' is a real tier (not just 'Out of Stock'), at-risk
+    # covers both -- an item that hasn't hit zero yet but is trending
+    # toward it is exactly what this card exists to surface.
     stock_df = stock()
-    at_risk = int((stock_df["stock_status"] == "Out of Stock").sum())
+    at_risk = int(stock_df["stock_status"].isin(["Out of Stock", "Below Reorder"]).sum())
 
     # open_imports: business-rule placeholder -- terminal states are
     # 'Arrived at Works' and 'Order Cancelled'; everything else is open.
