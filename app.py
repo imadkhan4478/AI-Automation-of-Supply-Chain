@@ -73,9 +73,8 @@ if "current_page" not in st.session_state:
 with st.sidebar:
     ui.sidebar_logo()
     st.markdown(
-        f"<h2 style='color:{T.NAVY};margin-bottom:0;text-align:center;font-family:{T.DISPLAY_FONT_STACK};'>Qadri Group</h2>"
-        f"<p style='color:{T.GOLD};font-weight:700;margin:2px 0 0 0;text-align:center;'>QG-IRS</p>"
-        f"<p style='color:{T.MUTED};font-size:0.78rem;margin-top:0;text-align:center;'>Intelligent Reporting System</p>",
+        f"<h2 style='color:{T.NAVY};margin-bottom:0;text-align:center;font-family:{T.DISPLAY_FONT_STACK};'>QG-IRS</h2>"
+        f"<p style='color:{T.GOLD};font-weight:600;margin-top:0;text-align:center;'>Intelligent Reporting System</p>",
         unsafe_allow_html=True,
     )
     st.write("")

@@ -1,9 +1,9 @@
-"""Logistics — the export shipping pipeline: shipments, packing, inland
-transport (shifting), and documentation. Export-only (2026-07-21) -- import
-shipment tracking already has its own tab (Imports, import_details);
-Logistics maps to the business's own export-side process stages instead,
-each backed by its own real table (export_shipments / packing_details /
-shifting_movements / export_documents), not a generic Export/Import toggle.
+"""Logistics — export shipments and documentation, plus packing and inland
+transport (shifting), which cover local jobs too, not just export ones.
+(2026-07-21) No longer an Export/Import toggle -- import SHIPMENT tracking
+already has its own tab (Imports, import_details); Logistics maps to the
+business's own pipeline stages instead, each backed by its own real table
+(export_shipments / packing_details / shifting_movements / export_documents).
 
 Dashboard-first like every other tab: KPIs + charts driven by the status
 filter, full table demoted to a "View real data" expander (search). See
@@ -20,24 +20,27 @@ from components import ui, charts
 
 def render():
     ui.page_header(
-        "Logistics", "Export shipping pipeline: shipments, packing, transport, documentation",
+        "Logistics", "Export shipments/documentation, plus packing and transport",
         module="logistics",
     )
     ui.chat_popover(db.ask_assistant)
 
-    # Named "Export ___" explicitly (not just "Shipments"/"Packing"/etc) --
-    # this page is export-only, and the view names should say so on their
-    # own rather than relying on the page subtitle to make that clear.
+    # "Export ___" only on Shipments and Documentation -- those two really
+    # are export-specific (export_shipments, export_documents both key off
+    # export_id). Packing and Transport are NOT export-scoped: packing_
+    # details and shifting_movements cover local jobs/moves too (only
+    # ~9% of packing_details rows even have an export_id) -- calling them
+    # "Export Packing"/"Export Transport" would misstate what's in them.
     view = st.selectbox(
-        "View", ["Export Shipments", "Export Packing", "Export Transport", "Export Documentation"],
+        "View", ["Export Shipments", "Packing", "Transport", "Export Documentation"],
     )
     st.write("")
 
     if view == "Export Shipments":
         _render_shipments()
-    elif view == "Export Packing":
+    elif view == "Packing":
         _render_packing()
-    elif view == "Export Transport":
+    elif view == "Transport":
         _render_transport()
     else:
         _render_documentation()

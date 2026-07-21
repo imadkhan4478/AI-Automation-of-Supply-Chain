@@ -25,19 +25,22 @@ from components import ui, charts
 # Map each source to its loader, its natural status column (for row coloring),
 # and its primary date column (for the quick date-range filter).
 #
-# Logistics (2026-07-21): the page itself is export-only now -- it maps to
-# the business's own export pipeline stages (shipments/packing/transport/
-# documentation), each its own real table, not an Export/Import toggle.
-# Import shipment tracking belongs to the "Imports" source above
-# (import_details) instead. Mirrors the Logistics page's four views exactly
-# so the report builder can never see anything the page itself can't.
+# Logistics (2026-07-21): no longer an Export/Import toggle -- maps to the
+# business's own pipeline stages instead, each its own real table. Import
+# SHIPMENT tracking belongs to the "Imports" source above (import_details).
+# Shipments and Documentation genuinely are export-only (export_shipments/
+# export_documents both key off export_id); Packing and Transport are NOT
+# -- packing_details/shifting_movements cover local jobs/moves too, so
+# those two aren't labeled "Export ___". Mirrors the Logistics page's four
+# views exactly so the report builder can never see anything the page
+# itself can't.
 SOURCES = {
     "Purchases":                       {"loader": lambda: db.purchases(), "status_col": "status", "date_col": "purchase_date"},
     "Inventory":                       {"loader": lambda: db.stock(),     "status_col": "stock_status", "date_col": None},
     "Imports":                         {"loader": lambda: db.imports(),   "status_col": "current_status", "date_col": "demand_date"},
     "Logistics — Export Shipments":     {"loader": lambda: db.logistics_shipments(), "status_col": "status", "date_col": "port_in_date"},
-    "Logistics — Export Packing":       {"loader": lambda: db.logistics_packing(), "status_col": "status", "date_col": "actual_rfd_date"},
-    "Logistics — Export Transport":     {"loader": lambda: db.logistics_shifting(), "status_col": "status", "date_col": "execution_date"},
+    "Logistics — Packing":             {"loader": lambda: db.logistics_packing(), "status_col": "status", "date_col": "actual_rfd_date"},
+    "Logistics — Transport":           {"loader": lambda: db.logistics_shifting(), "status_col": "status", "date_col": "execution_date"},
     "Logistics — Export Documentation": {"loader": lambda: db.logistics_documentation(), "status_col": "status", "date_col": None},
 }
 
