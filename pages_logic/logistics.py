@@ -25,14 +25,19 @@ def render():
     )
     ui.chat_popover(db.ask_assistant)
 
-    view = st.selectbox("View", ["Shipments", "Packing", "Transport", "Documentation"])
+    # Named "Export ___" explicitly (not just "Shipments"/"Packing"/etc) --
+    # this page is export-only, and the view names should say so on their
+    # own rather than relying on the page subtitle to make that clear.
+    view = st.selectbox(
+        "View", ["Export Shipments", "Export Packing", "Export Transport", "Export Documentation"],
+    )
     st.write("")
 
-    if view == "Shipments":
+    if view == "Export Shipments":
         _render_shipments()
-    elif view == "Packing":
+    elif view == "Export Packing":
         _render_packing()
-    elif view == "Transport":
+    elif view == "Export Transport":
         _render_transport()
     else:
         _render_documentation()
@@ -91,19 +96,14 @@ def _render_shipments():
         st.write("")
         d1, d2 = st.columns(2)
         with d1:
-            ui.section("Shipments Over Time")
+            ui.section("Shipments Over Time (by week)")
             trend_src = data.dropna(subset=["port_in_date"])
             if len(trend_src):
-                complete_src, asof = ui.exclude_partial_month(trend_src, "port_in_date")
-                by_month = (complete_src.assign(month=pd.to_datetime(complete_src["port_in_date"]).dt.to_period("M").dt.to_timestamp())
-                            .groupby("month", as_index=False).size().rename(columns={"size": "shipments"}))
-                if len(by_month):
-                    charts.trend_line(by_month, "month", "shipments", height=280)
-                note = ui.excluded_month_note(asof)
+                by_week = ui.weekly_trend_points(trend_src.assign(_n=1), "port_in_date", "_n").rename(columns={"_n": "shipments"})
+                charts.trend_line(by_week, "week", "shipments", height=280)
+                note = ui.partial_week_note(pd.to_datetime(trend_src["port_in_date"]).max())
                 if note:
                     st.caption(note)
-                if not len(by_month):
-                    st.caption("Only the in-progress month is in the current view -- nothing complete to trend yet.")
             else:
                 st.caption("No port-in dates in the current view yet.")
         with d2:
@@ -286,19 +286,14 @@ def _render_transport():
         st.write("")
         d1, d2 = st.columns(2)
         with d1:
-            ui.section("Movements Over Time")
+            ui.section("Movements Over Time (by week)")
             trend_src = data.dropna(subset=["execution_date"])
             if len(trend_src):
-                complete_src, asof = ui.exclude_partial_month(trend_src, "execution_date")
-                by_month = (complete_src.assign(month=pd.to_datetime(complete_src["execution_date"]).dt.to_period("M").dt.to_timestamp())
-                            .groupby("month", as_index=False).size().rename(columns={"size": "movements"}))
-                if len(by_month):
-                    charts.trend_line(by_month, "month", "movements", height=280)
-                note = ui.excluded_month_note(asof)
+                by_week = ui.weekly_trend_points(trend_src.assign(_n=1), "execution_date", "_n").rename(columns={"_n": "movements"})
+                charts.trend_line(by_week, "week", "movements", height=280)
+                note = ui.partial_week_note(pd.to_datetime(trend_src["execution_date"]).max())
                 if note:
                     st.caption(note)
-                if not len(by_month):
-                    st.caption("Only the in-progress month is in the current view -- nothing complete to trend yet.")
             else:
                 st.caption("No execution dates in the current view yet.")
         with d2:

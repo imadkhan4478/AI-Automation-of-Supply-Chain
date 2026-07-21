@@ -26,42 +26,6 @@ def dashboard_kpis():
     return _src.get_dashboard_kpis()
 
 
-def purchase_trend():
-    """Real monthly purchase value (PKR millions) from purchases_data.
-
-    NOTE: the current extract only spans ~2 months (see purchases.purchase
-    min/max), so this may show as few as 1-2 points until more history
-    accumulates. The trailing month is dropped here if it's still in
-    progress (see ui.exclude_partial_month) -- a 9-day total sitting next
-    to a full month reads as a decline that isn't real. Pair with
-    purchases_asof() + ui.excluded_month_note() for the matching caption.
-    """
-    query = text("""
-        SELECT
-            TO_CHAR(DATE_TRUNC('month', purchase), 'Mon YYYY') AS month,
-            SUM(amount) / 1e6 AS purchase_value_m
-        FROM public.purchases_data
-        WHERE purchase IS NOT NULL
-        GROUP BY DATE_TRUNC('month', purchase)
-        ORDER BY DATE_TRUNC('month', purchase)
-    """)
-    df = pd.read_sql(query, get_engine())
-    asof = purchases_asof()
-    if asof is not None and len(df):
-        import calendar
-        last_day = calendar.monthrange(asof.year, asof.month)[1]
-        if asof.day < last_day:
-            # Compare against the TO_CHAR label (computed server-side, so
-            # immune to a real quirk hit here: reading DATE_TRUNC's raw
-            # TIMESTAMP back through this driver/pandas comes back
-            # tz-shifted -- e.g. "Jun 2026"'s own month_start value lands
-            # on 2026-05-31 once made tz-naive, one calendar month off. The
-            # text label was never affected, so match on that instead of
-            # trying to compare a mis-shifted timestamp.
-            df = df[df["month"] != asof.strftime("%b %Y")]
-    return df.reset_index(drop=True)
-
-
 def purchases_asof():
     """Real max purchase date currently in the data."""
     df = pd.read_sql(text("SELECT MAX(purchase) AS d FROM public.purchases_data WHERE purchase IS NOT NULL"),
@@ -70,16 +34,23 @@ def purchases_asof():
 
 
 def weekly_trend():
-    """Real weekly buckets from purchases_data — feeds the KPI sparklines.
+    """Real weekly buckets from purchases_data — feeds the Dashboard's main
+    trend line and the KPI sparklines.
 
     NOTE: the current extract spans ~1 month, so this is a handful of real
     points (however many ISO weeks exist in the data), not a fabricated
     smooth series. `ui.kpi_card`'s sparkline renders nothing if it gets
     fewer than 2 points, so a thin extract degrades gracefully.
+
+    `week`::date -- without the cast, DATE_TRUNC's raw TIMESTAMP comes back
+    through this driver/pandas shifted by the local UTC offset (a week
+    starting Monday lands on the preceding Sunday once made tz-naive).
+    Casting to a plain date in SQL avoids the tz reinterpretation
+    entirely, rather than trying to correct it after the fact.
     """
     query = text("""
         SELECT
-            DATE_TRUNC('week', purchase) AS week,
+            DATE_TRUNC('week', purchase)::date AS week,
             SUM(amount) AS purchase_value,
             SUM(CASE WHEN required_d IS NOT NULL AND purchase > required_d THEN 1 ELSE 0 END) AS delayed,
             COUNT(*) AS total,

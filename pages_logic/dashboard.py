@@ -62,8 +62,9 @@ def render():
     left, right = st.columns([2, 1])
     with left:
         ui.section("Purchase Value Trend")
-        charts.trend_line(db.purchase_trend(), x="month", y="purchase_value_m")
-        st.caption(ui.excluded_month_note(db.purchases_asof(), "PKR millions per month"))
+        trend_df = wk.assign(purchase_value_m=wk["purchase_value"] / 1e6)
+        charts.trend_line(trend_df, x="week", y="purchase_value_m")
+        st.caption(ui.partial_week_note(db.purchases_asof(), "PKR millions per week"))
     with right:
         ui.section("Attention Required")
         for a in db.alerts():

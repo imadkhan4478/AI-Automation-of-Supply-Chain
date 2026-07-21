@@ -1,5 +1,5 @@
 """
-Supply Chain Intelligence System — frontend entry point.
+QG-IRS (Qadri Group Intelligent Reporting System) — frontend entry point.
 
 This file does ONLY two things:
   1. sets up the page + navigation
@@ -34,7 +34,7 @@ from pages_logic import (
 _LOGO_PATH = os.path.join(os.path.dirname(__file__), "assets", "qadri_logo_transparent.png")
 
 st.set_page_config(
-    page_title="Supply Chain Intelligence",
+    page_title="QG-IRS",
     page_icon=_LOGO_PATH if os.path.exists(_LOGO_PATH) else "📦",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -74,7 +74,8 @@ with st.sidebar:
     ui.sidebar_logo()
     st.markdown(
         f"<h2 style='color:{T.NAVY};margin-bottom:0;text-align:center;font-family:{T.DISPLAY_FONT_STACK};'>Qadri Group</h2>"
-        f"<p style='color:{T.GOLD};font-weight:600;margin-top:0;text-align:center;'>Supply Chain Intelligence</p>",
+        f"<p style='color:{T.GOLD};font-weight:700;margin:2px 0 0 0;text-align:center;'>QG-IRS</p>"
+        f"<p style='color:{T.MUTED};font-size:0.78rem;margin-top:0;text-align:center;'>Intelligent Reporting System</p>",
         unsafe_allow_html=True,
     )
     st.write("")

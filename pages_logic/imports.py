@@ -77,18 +77,13 @@ def render():
         trend_src = data.dropna(subset=["demand_date"])
         d1, d2 = st.columns(2)
         with d1:
-            ui.section("Import Value Trend (by month)")
+            ui.section("Import Value Trend (by week)")
             if len(trend_src):
-                complete_src, asof = ui.exclude_partial_month(trend_src, "demand_date")
-                by_month = (complete_src.assign(month=pd.to_datetime(complete_src["demand_date"]).dt.to_period("M").dt.to_timestamp())
-                            .groupby("month", as_index=False)["total_value_pkr"].sum())
-                if len(by_month):
-                    charts.trend_line(by_month, "month", "total_value_pkr", height=280)
-                note = ui.excluded_month_note(asof)
+                by_week = ui.weekly_trend_points(trend_src, "demand_date", "total_value_pkr")
+                charts.trend_line(by_week, "week", "total_value_pkr", height=280)
+                note = ui.partial_week_note(pd.to_datetime(trend_src["demand_date"]).max())
                 if note:
                     st.caption(note)
-                if not len(by_month):
-                    st.caption("Only the in-progress month is in the current view -- nothing complete to trend yet.")
             else:
                 st.caption("No demand dates in the current view yet.")
         with d2:

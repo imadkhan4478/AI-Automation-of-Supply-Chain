@@ -452,46 +452,41 @@ def money(value):
     return f"PKR {value:,.0f}"
 
 
-def excluded_month_note(asof_date, base_caption=""):
-    """Caption to pair with a monthly trend chart that has ALREADY dropped
-    its trailing in-progress month (see exclude_partial_month below).
-    Returns `base_caption` unchanged if `asof_date` is the real end of its
-    month (nothing was dropped), or None was passed.
+def weekly_trend_points(df, date_col, value_col, agg="sum"):
+    """Group a filtered DataFrame into real weekly points for a trend
+    line -- the standard granularity for trend charts in this app.
+
+    Monthly grouping was tried first, but with ~1 month of real data
+    behind most of these charts that's at most 1-2 points (a lone dot
+    isn't a trend line, and comparing a full month to a same-extract
+    partial one reads as a decline that isn't real -- see git history).
+    Weekly buckets give several real points across the same real date
+    range without fabricating anything in between them. A trailing
+    partial week is still INCLUDED (unlike the old monthly handling)
+    since being a day or two short of 7 is a minor wobble, not the
+    ~20-day gap a partial month was -- see partial_week_note() for the
+    (non-exclusionary) caption that flags it.
     """
-    import calendar
+    d = df.dropna(subset=[date_col])
+    if d.empty:
+        return d.assign(week=[])
+    weeks = pd.to_datetime(d[date_col]).dt.to_period("W").dt.start_time
+    return d.assign(week=weeks).groupby("week", as_index=False)[value_col].agg(agg)
+
+
+def partial_week_note(asof_date, base_caption=""):
+    """Caption flagging when the most recent week in a weekly trend is
+    still in progress. Returns `base_caption` unchanged if the week is
+    already complete (Sunday reached) or asof_date is None.
+    """
     if asof_date is None:
         return base_caption
-    last_day = calendar.monthrange(asof_date.year, asof_date.month)[1]
-    if asof_date.day >= last_day:
+    ts = pd.Timestamp(asof_date)
+    week_end = ts.to_period("W").end_time.date()
+    if ts.date() >= week_end:
         return base_caption
-    note = (f"Showing complete months only — {asof_date:%B %Y} will appear once "
-            f"finished (data through {asof_date:%b %d, %Y}).")
+    note = f"Most recent week still in progress (data through {ts:%b %d, %Y})."
     return f"{base_caption} ({note})" if base_caption else note
-
-
-def exclude_partial_month(df, date_col):
-    """Drop rows in the trailing calendar month if that month is still in
-    progress, so a month-grouped trend chart only ever shows complete
-    months (rather than a still-filling-up month next to full ones, which
-    reads as a decline that isn't real -- see excluded_month_note above
-    for the matching caption).
-
-    Doesn't invent what the dropped month "would" total -- it's just not
-    shown yet. Returns (filtered_df, asof_date) so the caller can pass
-    asof_date straight to excluded_month_note() for the caption; asof_date
-    is None (nothing dropped) when df is empty or its latest month is
-    already complete.
-    """
-    import calendar
-    if df.empty:
-        return df, None
-    dates = pd.to_datetime(df[date_col])
-    asof = dates.max()
-    last_day = calendar.monthrange(asof.year, asof.month)[1]
-    if asof.day >= last_day:
-        return df, None
-    cutoff = asof.replace(day=1)
-    return df[dates < cutoff], asof
 
 
 # ======================================================================

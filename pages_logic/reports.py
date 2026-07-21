@@ -32,13 +32,13 @@ from components import ui, charts
 # (import_details) instead. Mirrors the Logistics page's four views exactly
 # so the report builder can never see anything the page itself can't.
 SOURCES = {
-    "Purchases":               {"loader": lambda: db.purchases(), "status_col": "status", "date_col": "purchase_date"},
-    "Inventory":               {"loader": lambda: db.stock(),     "status_col": "stock_status", "date_col": None},
-    "Imports":                 {"loader": lambda: db.imports(),   "status_col": "current_status", "date_col": "demand_date"},
-    "Logistics — Shipments":    {"loader": lambda: db.logistics_shipments(), "status_col": "status", "date_col": "port_in_date"},
-    "Logistics — Packing":      {"loader": lambda: db.logistics_packing(), "status_col": "status", "date_col": "actual_rfd_date"},
-    "Logistics — Transport":    {"loader": lambda: db.logistics_shifting(), "status_col": "status", "date_col": "execution_date"},
-    "Logistics — Documentation": {"loader": lambda: db.logistics_documentation(), "status_col": "status", "date_col": None},
+    "Purchases":                       {"loader": lambda: db.purchases(), "status_col": "status", "date_col": "purchase_date"},
+    "Inventory":                       {"loader": lambda: db.stock(),     "status_col": "stock_status", "date_col": None},
+    "Imports":                         {"loader": lambda: db.imports(),   "status_col": "current_status", "date_col": "demand_date"},
+    "Logistics — Export Shipments":     {"loader": lambda: db.logistics_shipments(), "status_col": "status", "date_col": "port_in_date"},
+    "Logistics — Export Packing":       {"loader": lambda: db.logistics_packing(), "status_col": "status", "date_col": "actual_rfd_date"},
+    "Logistics — Export Transport":     {"loader": lambda: db.logistics_shifting(), "status_col": "status", "date_col": "execution_date"},
+    "Logistics — Export Documentation": {"loader": lambda: db.logistics_documentation(), "status_col": "status", "date_col": None},
 }
 
 _AGG_FUNCS = {"Sum": "sum", "Average": "mean", "Count": "count"}
