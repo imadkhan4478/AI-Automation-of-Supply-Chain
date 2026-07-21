@@ -6,6 +6,12 @@ unfiltered -- so picking a status in the dropdown would filter the table
 but leave the donut showing the full unfiltered breakdown, which read as
 inconsistent. It's computed here from the already-filtered DataFrame
 instead, so the two always agree.
+
+Filters (2026-07-21): db.imports() now also joins shipment_details (ETD/
+ETA, shipping line, mode of shipment, clearance mode) and payment_history
+(bank, payment mode) -- both real 1:1 with import_details, no row fan-out.
+Documentation Status / GIN Status were checked and left out: 449/451 and
+451/451 NULL respectively, so neither can support a real filter.
 """
 
 import pandas as pd
@@ -19,8 +25,34 @@ def render():
     ui.page_header("Imports", "Import shipments, values, and customs clearance", module="imports")
     ui.chat_popover(db.ask_assistant)
 
-    status = st.selectbox("Show imports", db.imports_status_list())
-    data = db.imports(status=status)
+    f1, f2, f3 = st.columns(3)
+    with f1:
+        status = st.selectbox("Show imports", db.imports_status_list())
+    with f2:
+        branch = st.selectbox("Works", db.imports_branch_list())
+    with f3:
+        category = st.selectbox("Item Category", db.imports_category_list())
+
+    with st.expander("More filters — supplier, customer, country, shipping line, mode, bank"):
+        mf1, mf2, mf3 = st.columns(3)
+        with mf1:
+            supplier = st.selectbox("Supplier", db.imports_supplier_list())
+        with mf2:
+            customer = st.selectbox("Customer", db.imports_customer_list())
+        with mf3:
+            country = st.selectbox("Country", db.imports_country_list())
+        mf4, mf5, mf6 = st.columns(3)
+        with mf4:
+            shipping_line = st.selectbox("Shipping Line", db.imports_shipping_line_list())
+        with mf5:
+            mode_of_shipment = st.selectbox("Mode of Shipment", db.imports_mode_of_shipment_list())
+        with mf6:
+            bank = st.selectbox("Bank", db.imports_bank_list())
+
+    data = db.imports(
+        status=status, branch=branch, supplier=supplier, customer=customer, country=country, category=category,
+        shipping_line=shipping_line, mode_of_shipment=mode_of_shipment, bank=bank,
+    )
     st.write("")
 
     # -------------------------------------------------- KPIs

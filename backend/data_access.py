@@ -113,8 +113,9 @@ def alerts():
 
 
 # --- Purchases -------------------------------------------------------
-def purchases(status="All", supplier="All"):
-    """Real data: purchase orders joined to item names, with a derived status.
+def purchases(status="All", supplier="All", branch="All", category="All"):
+    """Real data: purchase orders joined to item names + category/material
+    (from `items`), with a derived status.
 
     purchases_data has no status column, so it is derived from the dates:
       - no purchase date yet                      -> 'Pending'
@@ -124,6 +125,10 @@ def purchases(status="All", supplier="All"):
     NOTE: this is a placeholder business rule (like the stock reorder rule).
     If the business defines delay differently (e.g. vs ppc_store date, or a
     grace period), only this CASE expression changes — the page stays as is.
+
+    `material` (items.material_standard) is real but sparse (~33% of rows)
+    -- returned as a column for search/table, not offered as its own filter
+    dropdown since two-thirds of rows would just show as unmatched.
     """
     query = text("""
         SELECT
@@ -132,11 +137,16 @@ def purchases(status="All", supplier="All"):
             p.supplier,
             COALESCE(i.item, p.item_code) AS item,
             p.branch,
+            i.item_category,
+            i.material_standard AS material,
             p.qty,
             p.amount,
             p.required_d AS required_date,
             p.purchase   AS purchase_date,
+            p.ppc_store,
             p.mop,
+            p.bill_no,
+            p.sourcing_o AS sourcing_officer,
             CASE
                 WHEN p.purchase IS NULL THEN 'Pending'
                 WHEN p.required_d IS NOT NULL
@@ -153,6 +163,10 @@ def purchases(status="All", supplier="All"):
         df = df[df["status"] == status].reset_index(drop=True)
     if supplier != "All":
         df = df[df["supplier"] == supplier].reset_index(drop=True)
+    if branch != "All":
+        df = df[df["branch"] == branch].reset_index(drop=True)
+    if category != "All":
+        df = df[df["item_category"] == category].reset_index(drop=True)
     return df
 
 
@@ -166,6 +180,40 @@ def supplier_list():
     """)
     df = pd.read_sql(query, get_engine())
     return ["All"] + df["supplier"].tolist()
+
+
+def purchases_branch_list():
+    query = text("""
+        SELECT DISTINCT branch FROM public.purchases_data
+        WHERE branch IS NOT NULL AND branch <> '' ORDER BY 1
+    """)
+    df = pd.read_sql(query, get_engine())
+    return ["All"] + df["branch"].tolist()
+
+
+def purchases_category_list():
+    query = text("""
+        SELECT DISTINCT i.item_category
+        FROM public.purchases_data p JOIN public.items i ON i.item_code = p.item_code
+        WHERE i.item_category IS NOT NULL AND i.item_category <> '' ORDER BY 1
+    """)
+    df = pd.read_sql(query, get_engine())
+    return ["All"] + df["item_category"].tolist()
+
+
+def purchases_mop_list():
+    query = text("SELECT DISTINCT mop FROM public.purchases_data WHERE mop IS NOT NULL AND mop <> '' ORDER BY 1")
+    df = pd.read_sql(query, get_engine())
+    return ["All"] + df["mop"].tolist()
+
+
+def purchases_sourcing_officer_list():
+    query = text("""
+        SELECT DISTINCT sourcing_o FROM public.purchases_data
+        WHERE sourcing_o IS NOT NULL AND sourcing_o <> '' ORDER BY 1
+    """)
+    df = pd.read_sql(query, get_engine())
+    return ["All"] + df["sourcing_o"].tolist()
 
 
 def purchase_status_list():
@@ -193,7 +241,7 @@ def purchase_status_list():
 
 
 # --- Inventory -------------------------------------------------------
-def stock(status="All", category="All"):
+def stock(status="All", category="All", branch="All"):
     """Real data: current stock joined to item names AND full item detail
     (category, unit of measure, specs, group, material standard) from
     `items`, with a computed status and a real (not fabricated) reorder
@@ -243,6 +291,7 @@ def stock(status="All", category="All"):
             s.branch,
             s.stock_qty,
             s.available_qty,
+            s.hold_qty,
             i.item_category,
             i.uom,
             i.specs,
@@ -279,7 +328,15 @@ def stock(status="All", category="All"):
         df = df[df["stock_status"] == status].reset_index(drop=True)
     if category != "All":
         df = df[df["item_category"] == category].reset_index(drop=True)
+    if branch != "All":
+        df = df[df["branch"] == branch].reset_index(drop=True)
     return df
+
+
+def inventory_branch_list():
+    query = text("SELECT DISTINCT branch FROM public.stock WHERE branch IS NOT NULL AND branch <> '' ORDER BY 1")
+    df = pd.read_sql(query, get_engine())
+    return ["All"] + df["branch"].tolist()
 
 
 def inventory_category_list():
@@ -297,40 +354,73 @@ def inventory_category_list():
 
 
 # --- Imports ---------------------------------------------------------
-def imports(status="All"):
-    """Real data: import shipments from import_details.
+def imports(status="All", branch="All", supplier="All", customer="All", country="All", category="All",
+            shipping_line="All", mode_of_shipment="All", bank="All"):
+    """Real data: import shipments from import_details, enriched with the
+    matching shipment_details (logistics side: ETD, shipping line, mode of
+    shipment, clearance mode) and payment_history (bank, payment mode) rows
+    -- both confirmed 1:1 with import_details by import_id (451 rows each,
+    no fan-out risk from the LEFT JOINs).
 
     `current_status` is the real workflow state (10 distinct business values
     such as 'Arrived at Works', 'In Transit', 'Under Custom Clearance').
-    No join needed — customer/supplier/value all live on this table.
 
     NOTE: total_value_pkr is often 0 in the source (value is recorded in
     total_value_fc / foreign currency); both are returned so the page/team
     can decide which to display once an FX rule is provided.
+
+    Checked and deliberately left OUT (2026-07-21): docs_status (449/451
+    NULL), gin_status (100% NULL) -- neither can support a real filter.
+    `currency` no longer exists on payment_history (schema changed since
+    it was last checked; ex_rate is what's there now).
     """
     query = text("""
         SELECT
-            import_ref,
-            branch,
-            customer,
-            supplier,
-            supplier_country,
-            category,
-            total_wt_ton,
-            total_value_fc,
-            total_value_pkr,
-            demand_date,
-            req_date,
-            gin_date,
-            docs_status,
-            current_status
-        FROM public.import_details
-        ORDER BY import_id
+            d.import_ref,
+            d.branch,
+            d.customer,
+            d.supplier,
+            d.supplier_country,
+            d.category,
+            d.total_wt_ton,
+            d.total_value_fc,
+            d.total_value_pkr,
+            d.demand_date,
+            d.req_date,
+            d.gin_date,
+            d.current_status,
+            sd.etd,
+            sd.eta_final,
+            sd.s_line AS shipping_line,
+            sd.mode_of_shipment,
+            sd.clearance_mode,
+            ph.bank,
+            ph.payment_mode
+        FROM public.import_details d
+        LEFT JOIN public.shipment_details sd ON sd.import_id = d.import_id
+        LEFT JOIN public.payment_history ph ON ph.import_id = d.import_id
+        ORDER BY d.import_id
     """)
     df = pd.read_sql(query, get_engine())
 
     if status != "All":
         df = df[df["current_status"] == status].reset_index(drop=True)
+    if branch != "All":
+        df = df[df["branch"] == branch].reset_index(drop=True)
+    if supplier != "All":
+        df = df[df["supplier"] == supplier].reset_index(drop=True)
+    if customer != "All":
+        df = df[df["customer"] == customer].reset_index(drop=True)
+    if country != "All":
+        df = df[df["supplier_country"] == country].reset_index(drop=True)
+    if category != "All":
+        df = df[df["category"] == category].reset_index(drop=True)
+    if shipping_line != "All":
+        df = df[df["shipping_line"] == shipping_line].reset_index(drop=True)
+    if mode_of_shipment != "All":
+        df = df[df["mode_of_shipment"] == mode_of_shipment].reset_index(drop=True)
+    if bank != "All":
+        df = df[df["bank"] == bank].reset_index(drop=True)
     return df
 
 
@@ -345,6 +435,62 @@ def imports_status_list():
     """)
     df = pd.read_sql(query, get_engine())
     return ["All"] + df["current_status"].tolist()
+
+
+def _imports_distinct(column):
+    query = text(f"""
+        SELECT DISTINCT {column} FROM public.import_details
+        WHERE {column} IS NOT NULL AND {column} <> '' ORDER BY 1
+    """)
+    df = pd.read_sql(query, get_engine())
+    return ["All"] + df[column].tolist()
+
+
+def imports_branch_list():
+    return _imports_distinct("branch")
+
+
+def imports_supplier_list():
+    return _imports_distinct("supplier")
+
+
+def imports_customer_list():
+    return _imports_distinct("customer")
+
+
+def imports_country_list():
+    return _imports_distinct("supplier_country")
+
+
+def imports_category_list():
+    return _imports_distinct("category")
+
+
+def imports_shipping_line_list():
+    query = text("""
+        SELECT DISTINCT s_line FROM public.shipment_details
+        WHERE s_line IS NOT NULL AND s_line <> '' ORDER BY 1
+    """)
+    df = pd.read_sql(query, get_engine())
+    return ["All"] + df["s_line"].tolist()
+
+
+def imports_mode_of_shipment_list():
+    query = text("""
+        SELECT DISTINCT mode_of_shipment FROM public.shipment_details
+        WHERE mode_of_shipment IS NOT NULL AND mode_of_shipment <> '' ORDER BY 1
+    """)
+    df = pd.read_sql(query, get_engine())
+    return ["All"] + df["mode_of_shipment"].tolist()
+
+
+def imports_bank_list():
+    query = text("""
+        SELECT DISTINCT bank FROM public.payment_history
+        WHERE bank IS NOT NULL AND bank <> '' ORDER BY 1
+    """)
+    df = pd.read_sql(query, get_engine())
+    return ["All"] + df["bank"].tolist()
 
 
 
@@ -371,7 +517,7 @@ def imports_status_list():
 # v_shipment_metrics.total_logistics_cost/cost_per_kg and
 # v_shifting_metrics.savings_rs DID check out as real, sane values and are
 # used below.
-def logistics_shipments(status="All"):
+def logistics_shipments(status="All", stage="All", shipping_line="All", country="All"):
     """Real data: export shipments (public.export_shipments), the shipment-
     batch grain (165 rows -- a handful of exports have 2+ batches, so this
     is finer-grained than `exports` itself). LEFT JOINs exports for
@@ -380,12 +526,16 @@ def logistics_shipments(status="All"):
     50 of 165 rows have no export_id yet (shipment tracked before a formal
     export record exists) -- kept via LEFT JOIN rather than dropped, since
     that's real, current pipeline state, not bad data.
+
+    shipment_terms (64% coverage, 5 real values) and etd_karachi (81%
+    coverage) added 2026-07-21 -- both real, previously not selected.
     """
     query = text("""
         SELECT
             es.shipment_id, es.export_id,
             e.exp_no, e.customer, e.shipping_agent, e.payment_term,
             es.country, es.pod, es.shipment_stage, es.shipment_status,
+            es.shipment_terms, es.etd_karachi,
             es.net_weight_kgs, es.gross_weight_kgs,
             es.s_agent, es.c_agent, es.s_line,
             es.port_in_date, es.actual_arrival_date, es.cut_off_date,
@@ -400,6 +550,12 @@ def logistics_shipments(status="All"):
     df = pd.read_sql(query, get_engine())
     if status != "All":
         df = df[df["status"] == status].reset_index(drop=True)
+    if stage != "All":
+        df = df[df["shipment_stage"] == stage].reset_index(drop=True)
+    if shipping_line != "All":
+        df = df[df["s_line"] == shipping_line].reset_index(drop=True)
+    if country != "All":
+        df = df[df["country"] == country].reset_index(drop=True)
     return df
 
 
@@ -412,7 +568,28 @@ def logistics_shipment_status_list():
     return ["All"] + df["status"].tolist()
 
 
-def logistics_packing(status="All"):
+def _logistics_shipments_distinct(column):
+    query = text(f"""
+        SELECT DISTINCT {column} FROM public.export_shipments
+        WHERE {column} IS NOT NULL AND {column} <> '' ORDER BY 1
+    """)
+    df = pd.read_sql(query, get_engine())
+    return ["All"] + df[column].tolist()
+
+
+def logistics_shipment_stage_list():
+    return _logistics_shipments_distinct("shipment_stage")
+
+
+def logistics_shipping_line_list():
+    return _logistics_shipments_distinct("s_line")
+
+
+def logistics_shipment_country_list():
+    return _logistics_shipments_distinct("country")
+
+
+def logistics_packing(status="All", works="All", product_category="All", business_type="All"):
     """Real data: packing_details (1,375 rows). `status` uses
     `overall_status` (clean: 'Pending Packing' / 'In Progress' only) rather
     than the richer but messy `packing_status` free-text field (real values
@@ -424,11 +601,14 @@ def logistics_packing(status="All"):
     rfd_delay_days (actual_rfd_date - target_rfd) is computed here from
     real dates; target_packing_date is 100% NULL in the source so an
     "on-time packing" metric can't be derived at all yet.
+
+    `works` (2026-07-21): 100% populated, 15 real values -- a real filter
+    candidate that was missed when this view was first built.
     """
     query = text("""
         SELECT
             packing_id, export_id, exp_batch_raw, business_type, product_category,
-            customer_type, customer, jobs_no, qty, qty_uom, pkgs,
+            customer_type, customer, jobs_no, works, qty, qty_uom, pkgs,
             net_weight_kgs, gross_weight_kgs,
             actual_packing_date, target_rfd, actual_rfd_date,
             packing_status, overall_status,
@@ -441,7 +621,34 @@ def logistics_packing(status="All"):
     df["rfd_delay_days"] = (pd.to_datetime(df["actual_rfd_date"]) - pd.to_datetime(df["target_rfd"])).dt.days
     if status != "All":
         df = df[df["status"] == status].reset_index(drop=True)
+    if works != "All":
+        df = df[df["works"] == works].reset_index(drop=True)
+    if product_category != "All":
+        df = df[df["product_category"] == product_category].reset_index(drop=True)
+    if business_type != "All":
+        df = df[df["business_type"] == business_type].reset_index(drop=True)
     return df
+
+
+def _logistics_packing_distinct(column):
+    query = text(f"""
+        SELECT DISTINCT {column} FROM public.packing_details
+        WHERE {column} IS NOT NULL AND {column} <> '' ORDER BY 1
+    """)
+    df = pd.read_sql(query, get_engine())
+    return ["All"] + df[column].tolist()
+
+
+def logistics_packing_works_list():
+    return _logistics_packing_distinct("works")
+
+
+def logistics_packing_category_list():
+    return _logistics_packing_distinct("product_category")
+
+
+def logistics_packing_business_type_list():
+    return _logistics_packing_distinct("business_type")
 
 
 def logistics_packing_status_list():
@@ -453,7 +660,7 @@ def logistics_packing_status_list():
     return ["All"] + df["status"].tolist()
 
 
-def logistics_shifting(status="All"):
+def logistics_shifting(status="All", movement_type="All", payment_status="All"):
     """Real data: shifting_movements (464 rows) -- inland transport/
     dispatch. `status` uses `operational_status`, filled to 'In Progress'
     where NULL (218/464 rows): the real column has only 'Delivered' as a
@@ -464,7 +671,10 @@ def logistics_shifting(status="All"):
 
     v_shifting_metrics.savings_rs is included (checked sane: real spread,
     -195,900 to 328,600); its transit_days and savings_pct columns are
-    NOT included -- see the module-level note above for why.
+    NOT included -- see the module-level note above for why. The table's
+    own `shipment_status` column was checked too: only 246/464 populated
+    AND only 1 distinct value when it is -- not filterable, so it's left
+    out entirely rather than offered as a dead-end dropdown.
     """
     query = text("""
         SELECT
@@ -483,7 +693,29 @@ def logistics_shifting(status="All"):
     df = pd.read_sql(query, get_engine())
     if status != "All":
         df = df[df["status"] == status].reset_index(drop=True)
+    if movement_type != "All":
+        df = df[df["movement_type"] == movement_type].reset_index(drop=True)
+    if payment_status != "All":
+        df = df[df["payment_status"] == payment_status].reset_index(drop=True)
     return df
+
+
+def logistics_movement_type_list():
+    query = text("""
+        SELECT DISTINCT movement_type FROM public.shifting_movements
+        WHERE movement_type IS NOT NULL AND movement_type <> '' ORDER BY 1
+    """)
+    df = pd.read_sql(query, get_engine())
+    return ["All"] + df["movement_type"].tolist()
+
+
+def logistics_payment_status_list():
+    query = text("""
+        SELECT DISTINCT payment_status FROM public.shifting_movements
+        WHERE payment_status IS NOT NULL AND payment_status <> '' ORDER BY 1
+    """)
+    df = pd.read_sql(query, get_engine())
+    return ["All"] + df["payment_status"].tolist()
 
 
 def logistics_shifting_status_list():

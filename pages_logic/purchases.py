@@ -16,13 +16,28 @@ def render():
     ui.page_header("Purchases", "Track purchase orders, suppliers, and delivery status", module="purchases")
     ui.chat_popover(db.ask_assistant)
 
-    f1, f2 = st.columns(2)
+    f1, f2, f3, f4 = st.columns(4)
     with f1:
         status = st.selectbox("Show orders", db.purchase_status_list())
     with f2:
         supplier = st.selectbox("Supplier", db.supplier_list())
+    with f3:
+        branch = st.selectbox("Branch", db.purchases_branch_list())
+    with f4:
+        category = st.selectbox("Item Category", db.purchases_category_list())
 
-    data = db.purchases(status=status, supplier=supplier)
+    with st.expander("More filters — MOP, sourcing officer"):
+        mf1, mf2 = st.columns(2)
+        with mf1:
+            mop = st.selectbox("Mode of Purchase (MOP)", db.purchases_mop_list())
+        with mf2:
+            sourcing_officer = st.selectbox("Sourcing Officer", db.purchases_sourcing_officer_list())
+
+    data = db.purchases(status=status, supplier=supplier, branch=branch, category=category)
+    if mop != "All":
+        data = data[data["mop"] == mop].reset_index(drop=True)
+    if sourcing_officer != "All":
+        data = data[data["sourcing_officer"] == sourcing_officer].reset_index(drop=True)
     st.write("")
 
     # -------------------------------------------------- KPIs
@@ -106,7 +121,7 @@ def render():
     # -------------------------------------------------- Real data, on demand
     with st.expander("🔍 View real data / search"):
         search = st.text_input(
-            "Search", placeholder="Search by item, supplier, PO number, or ref no.",
+            "Search", placeholder="Search by item, supplier, PO number, ref no, or bill no.",
             label_visibility="collapsed",
         )
         table_data = data
@@ -114,7 +129,8 @@ def render():
             needle = search.lower()
             mask = data.apply(
                 lambda r: needle in str(r["item"]).lower() or needle in str(r["po_number"]).lower()
-                or needle in str(r["ref_no"]).lower() or needle in str(r["supplier"]).lower(),
+                or needle in str(r["ref_no"]).lower() or needle in str(r["supplier"]).lower()
+                or needle in str(r["bill_no"]).lower(),
                 axis=1,
             )
             table_data = data[mask]

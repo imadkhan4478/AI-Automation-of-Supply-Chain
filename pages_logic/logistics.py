@@ -50,8 +50,16 @@ def render():
 #  SHIPMENTS  (export_shipments + v_shipment_metrics)
 # ======================================================================
 def _render_shipments():
-    status = st.selectbox("Status", db.logistics_shipment_status_list(), key="log_ship_status")
-    data = db.logistics_shipments(status=status)
+    f1, f2, f3, f4 = st.columns(4)
+    with f1:
+        status = st.selectbox("Status", db.logistics_shipment_status_list(), key="log_ship_status")
+    with f2:
+        stage = st.selectbox("Shipment Stage", db.logistics_shipment_stage_list(), key="log_ship_stage")
+    with f3:
+        shipping_line = st.selectbox("Shipping Line", db.logistics_shipping_line_list(), key="log_ship_line")
+    with f4:
+        country = st.selectbox("Country", db.logistics_shipment_country_list(), key="log_ship_country")
+    data = db.logistics_shipments(status=status, stage=stage, shipping_line=shipping_line, country=country)
     st.write("")
 
     r1 = st.columns(3)
@@ -144,8 +152,16 @@ def _render_shipments():
 #  PACKING  (packing_details)
 # ======================================================================
 def _render_packing():
-    status = st.selectbox("Status", db.logistics_packing_status_list(), key="log_pack_status")
-    data = db.logistics_packing(status=status)
+    f1, f2, f3, f4 = st.columns(4)
+    with f1:
+        status = st.selectbox("Status", db.logistics_packing_status_list(), key="log_pack_status")
+    with f2:
+        works = st.selectbox("Works", db.logistics_packing_works_list(), key="log_pack_works")
+    with f3:
+        product_category = st.selectbox("Product Category", db.logistics_packing_category_list(), key="log_pack_cat")
+    with f4:
+        business_type = st.selectbox("Business Type", db.logistics_packing_business_type_list(), key="log_pack_biztype")
+    data = db.logistics_packing(status=status, works=works, product_category=product_category, business_type=business_type)
     st.write("")
 
     r1 = st.columns(3)
@@ -240,8 +256,14 @@ def _render_packing():
 #  TRANSPORT / SHIFTING  (shifting_movements + v_shifting_metrics)
 # ======================================================================
 def _render_transport():
-    status = st.selectbox("Status", db.logistics_shifting_status_list(), key="log_shift_status")
-    data = db.logistics_shifting(status=status)
+    f1, f2, f3 = st.columns(3)
+    with f1:
+        status = st.selectbox("Status", db.logistics_shifting_status_list(), key="log_shift_status")
+    with f2:
+        movement_type = st.selectbox("Movement Type", db.logistics_movement_type_list(), key="log_shift_movetype")
+    with f3:
+        payment_status = st.selectbox("Payment Status", db.logistics_payment_status_list(), key="log_shift_paystatus")
+    data = db.logistics_shifting(status=status, movement_type=movement_type, payment_status=payment_status)
     st.write("")
 
     r1 = st.columns(3)

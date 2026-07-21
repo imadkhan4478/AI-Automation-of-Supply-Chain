@@ -21,8 +21,10 @@ every filter.
 Category filter + search (2026-07-21): db.stock() now also joins in
 item_category/uom/specs/group_name/material_standard from `items`, so a
 search hit surfaces everything on file for that item, not just its name/
-branch/qty. Category is its own filter (34 real categories, e.g.
-'Bearings', 'Cutting Tools') alongside the status one.
+branch/qty. Category and Branch (4 real branches) are their own filters
+alongside status. hold_qty is now pulled in too (was never selected
+before) and shown as its own KPI -- reserved stock, not available for use,
+distinct from available_qty/stock_qty.
 """
 
 import streamlit as st
@@ -37,16 +39,18 @@ def render():
     ui.page_header("Inventory", "Current stock levels and usage-based reorder risk", module="inventory")
     ui.chat_popover(db.ask_assistant)
 
-    f1, f2 = st.columns(2)
+    f1, f2, f3 = st.columns(3)
     with f1:
         status = st.selectbox("Show items", ["All", "Out of Stock", "Below Reorder", "OK"])
     with f2:
         category = st.selectbox("Category", db.inventory_category_list())
-    data = db.stock(status=status, category=category)
+    with f3:
+        branch = st.selectbox("Branch", db.inventory_branch_list())
+    data = db.stock(status=status, category=category, branch=branch)
     st.write("")
 
     # -------------------------------------------------- KPIs
-    r1 = st.columns(3)
+    r1 = st.columns(4)
     with r1[0]:
         total_qty = int(data["available_qty"].sum()) if len(data) else 0
         ui.kpi_card("Available Units", f"{total_qty:,}")
@@ -54,6 +58,9 @@ def render():
         total_stock = int(data["stock_qty"].sum()) if len(data) else 0
         ui.kpi_card("Total Stock Qty", f"{total_stock:,}")
     with r1[2]:
+        total_hold = int(data["hold_qty"].sum()) if len(data) else 0
+        ui.kpi_card("On Hold", f"{total_hold:,}", sub="reserved, not available")
+    with r1[3]:
         ui.kpi_card("Items Shown", f"{len(data):,}")
 
     st.write("")
