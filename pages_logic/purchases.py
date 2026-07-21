@@ -18,7 +18,7 @@ def render():
 
     f1, f2 = st.columns(2)
     with f1:
-        status = st.selectbox("Show orders", ["All", "Pending", "Completed", "Delayed"])
+        status = st.selectbox("Show orders", db.purchase_status_list())
     with f2:
         supplier = st.selectbox("Supplier", db.supplier_list())
 

@@ -173,6 +173,30 @@ def supplier_list():
     return ["All"] + df["supplier"].tolist()
 
 
+def purchase_status_list():
+    """Real distinct purchase statuses, derived the same way purchases()
+    computes 'status' -- not hardcoded. The old hardcoded filter list
+    (All/Pending/Completed/Delayed) included 'Pending' even though the
+    current extract has zero rows with purchase IS NULL (every order
+    already has a completion date), so picking it always silently emptied
+    the page. Deriving this dynamically means the filter can never offer
+    an option that doesn't exist in the data -- if Pending orders show up
+    in a future extract, this list picks them up automatically.
+    """
+    query = text("""
+        SELECT DISTINCT
+            CASE
+                WHEN purchase IS NULL THEN 'Pending'
+                WHEN required_d IS NOT NULL AND purchase > required_d THEN 'Delayed'
+                ELSE 'Completed'
+            END AS status
+        FROM public.purchases_data
+        ORDER BY 1
+    """)
+    df = pd.read_sql(query, get_engine())
+    return ["All"] + df["status"].tolist()
+
+
 # --- Inventory -------------------------------------------------------
 def stock(status="All"):
     """Real data: current stock joined to item names, with a computed status

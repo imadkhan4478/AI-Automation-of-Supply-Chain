@@ -27,11 +27,21 @@ from components import ui, charts
 # status_col was "shipment_status" here but the connected logistics() function
 # names the real column "status" (a leftover from the old stub, which used a
 # different name) -- fixed, since it silently broke row coloring on that report.
+#
+# "Logistics" used to be one source backed by db.logistics(), which defaults
+# to kind="Export" -- there was no control here to switch it, so Import
+# shipments (public.shipment_details, 451 real rows) were completely
+# unreachable from the report builder even though the Logistics *page*
+# lets you view either. Export and Import are genuinely different schemas
+# (different status values, different date column), so this is split into
+# two sources rather than bolted on as a third selector -- consistent with
+# how the Logistics page itself treats them as separate views.
 SOURCES = {
-    "Purchases": {"loader": lambda: db.purchases(), "status_col": "status", "date_col": "purchase_date"},
-    "Inventory": {"loader": lambda: db.stock(),     "status_col": "stock_status", "date_col": None},
-    "Imports":   {"loader": lambda: db.imports(),   "status_col": "current_status", "date_col": "demand_date"},
-    "Logistics": {"loader": lambda: db.logistics(), "status_col": "status", "date_col": "sailing_date"},
+    "Purchases":         {"loader": lambda: db.purchases(), "status_col": "status", "date_col": "purchase_date"},
+    "Inventory":         {"loader": lambda: db.stock(),     "status_col": "stock_status", "date_col": None},
+    "Imports":           {"loader": lambda: db.imports(),   "status_col": "current_status", "date_col": "demand_date"},
+    "Logistics — Export": {"loader": lambda: db.logistics(kind="Export"), "status_col": "status", "date_col": "sailing_date"},
+    "Logistics — Import": {"loader": lambda: db.logistics(kind="Import"), "status_col": "status", "date_col": "etd"},
 }
 
 _AGG_FUNCS = {"Sum": "sum", "Average": "mean", "Count": "count"}
@@ -257,19 +267,20 @@ def render():
     # -------------------------------------------------- 7. Actions
     ui.section("7 · Do something with this report")
     a1, a2, a3, a4, a5 = st.columns(5)
+    slug = source.lower().replace(" — ", "_").replace(" ", "_")
 
     with a1:
         st.download_button(
             "⬇  Export CSV",
             result.to_csv(index=False).encode("utf-8"),
-            file_name=f"{source.lower()}_report.csv",
+            file_name=f"{slug}_report.csv",
             mime="text/csv", width="stretch",
         )
     with a2:
         st.download_button(
             "⬇  Export Excel",
             _to_excel_bytes(result, comparison_table),
-            file_name=f"{source.lower()}_report.xlsx",
+            file_name=f"{slug}_report.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             width="stretch",
         )
@@ -277,7 +288,7 @@ def render():
         st.download_button(
             "⬇  Export PDF",
             _to_pdf_bytes(result, source, active_filter_summary, comparison_table, comparison_caption),
-            file_name=f"{source.lower()}_report.pdf",
+            file_name=f"{slug}_report.pdf",
             mime="application/pdf", width="stretch",
         )
     with a4:
