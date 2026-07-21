@@ -17,6 +17,12 @@ the moment you filter to a tier defined by low available_qty -- not a
 chart bug, just the wrong measure for that filter. "Items by Branch"
 below counts rows instead of summing qty, so it stays meaningful under
 every filter.
+
+Category filter + search (2026-07-21): db.stock() now also joins in
+item_category/uom/specs/group_name/material_standard from `items`, so a
+search hit surfaces everything on file for that item, not just its name/
+branch/qty. Category is its own filter (34 real categories, e.g.
+'Bearings', 'Cutting Tools') alongside the status one.
 """
 
 import streamlit as st
@@ -31,8 +37,12 @@ def render():
     ui.page_header("Inventory", "Current stock levels and usage-based reorder risk", module="inventory")
     ui.chat_popover(db.ask_assistant)
 
-    status = st.selectbox("Show items", ["All", "Out of Stock", "Below Reorder", "OK"])
-    data = db.stock(status=status)
+    f1, f2 = st.columns(2)
+    with f1:
+        status = st.selectbox("Show items", ["All", "Out of Stock", "Below Reorder", "OK"])
+    with f2:
+        category = st.selectbox("Category", db.inventory_category_list())
+    data = db.stock(status=status, category=category)
     st.write("")
 
     # -------------------------------------------------- KPIs
@@ -113,7 +123,7 @@ def render():
     # -------------------------------------------------- Real data, on demand
     with st.expander("🔍 View real data / search"):
         search = st.text_input(
-            "Search", placeholder="Search by item, item code, or branch.",
+            "Search", placeholder="Search by item, item code, branch, category, or specs.",
             label_visibility="collapsed",
         )
         table_data = data
@@ -121,7 +131,8 @@ def render():
             needle = search.lower()
             mask = data.apply(
                 lambda r: needle in str(r["item"]).lower() or needle in str(r["item_code"]).lower()
-                or needle in str(r["branch"]).lower(),
+                or needle in str(r["branch"]).lower() or needle in str(r["item_category"]).lower()
+                or needle in str(r["specs"]).lower(),
                 axis=1,
             )
             table_data = data[mask]

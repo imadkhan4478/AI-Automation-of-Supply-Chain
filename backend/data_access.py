@@ -193,14 +193,21 @@ def purchase_status_list():
 
 
 # --- Inventory -------------------------------------------------------
-def stock(status="All"):
-    """Real data: current stock joined to item names, with a computed status
-    and a real (not fabricated) reorder formula.
+def stock(status="All", category="All"):
+    """Real data: current stock joined to item names AND full item detail
+    (category, unit of measure, specs, group, material standard) from
+    `items`, with a computed status and a real (not fabricated) reorder
+    formula.
 
     The stock table has no item name (it's in `items`) and no stored status,
     so we join for the name and derive `stock_status` here. This keeps the
     return shape identical to what the Inventory page expects, so the page
     does not change.
+
+    `item_category` / `uom` / `specs` have solid real coverage (~93-100% of
+    26,818 items); `group_name` / `material_standard` are real but much
+    sparser (~13-32%) -- all four are still returned so a search hit shows
+    everything actually on file for that item, not just name/branch/qty.
 
     Status tiers, business's real formula (confirmed 2026-07-21, and matches
     what the teammate's own chatbot backend documents independently):
@@ -236,6 +243,11 @@ def stock(status="All"):
             s.branch,
             s.stock_qty,
             s.available_qty,
+            i.item_category,
+            i.uom,
+            i.specs,
+            i.group_name,
+            i.material_standard,
             iss.issuance_3m_qty,
             ab.safety_days,
             ab.lead_time_days
@@ -265,7 +277,23 @@ def stock(status="All"):
 
     if status != "All":
         df = df[df["stock_status"] == status].reset_index(drop=True)
+    if category != "All":
+        df = df[df["item_category"] == category].reset_index(drop=True)
     return df
+
+
+def inventory_category_list():
+    """Real distinct item_category values that actually appear in stock
+    (not all 34 categories in `items` necessarily have stock on hand)."""
+    query = text("""
+        SELECT DISTINCT i.item_category
+        FROM public.stock s
+        JOIN public.items i ON i.item_code = s.item_code
+        WHERE i.item_category IS NOT NULL AND i.item_category <> ''
+        ORDER BY 1
+    """)
+    df = pd.read_sql(query, get_engine())
+    return ["All"] + df["item_category"].tolist()
 
 
 # --- Imports ---------------------------------------------------------
