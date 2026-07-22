@@ -477,6 +477,38 @@ SAFETY STOCK & REORDER LEVEL (ROP) — always PER BRANCH
   number, and never label a company total as "per branch".
 - A branch with no issuance history has NULL branch_daily_usage -> the figure is unknown for
   that branch; say so rather than treating it as 0.
+ITEM STOCK-HEALTH STATUS (critical / red flag / reorder / dead stock / healthy) — PER BRANCH
+- Every ab_items row (item+branch) gets ONE status from its available stock vs its
+  forecast-driven safety/reorder thresholds. The forecast is HISTORICAL ISSUANCE: use the
+  branch daily usage (SUM(issuance.quantity)/NULLIF(MAX(from_date)-MIN(from_date)+1,0) GROUP BY
+  item_code, branch), NOT rank. Do NOT map "critical" to rank='A' (rank A/B is importance, not
+  stock health).
+- Build these per item+branch: stock_qty = SUM(stock.stock_qty) — the TOTAL on-hand stock
+  quantity, NOT stock.available_qty (available excludes held stock; the status model uses the
+  full stock_qty); daily_usage (above); safety_stock = daily_usage*safety_days; reorder_level =
+  daily_usage*(lead_time_days+safety_days); in_transit_qty = that item's UPCOMING import qty
+  (SUM(import_item.qty) for imports with sd.eta_final>=CURRENT_DATE and current_status NOT IN
+  ('Arrived at Works','Order Cancelled'); item-level — imports carry no branch); last_issue =
+  MAX(issuance.from_date) for the item+branch.
+- Assign status with this CASE (evaluated top-down, first match wins):
+    CASE
+      WHEN daily_usage IS NULL OR daily_usage = 0 THEN
+        CASE WHEN last_issue IS NULL OR last_issue < CURRENT_DATE - INTERVAL '12 months'
+             THEN 'Dead Stock (Review Before Action)' ELSE 'Healthy (OK)' END
+      WHEN stock_qty < daily_usage*safety_days                    THEN 'Critical (Below Safety Stock)'
+      WHEN stock_qty < daily_usage*lead_time_days                 THEN 'Red Flag (Urgent Order Required)'
+      WHEN stock_qty < daily_usage*(lead_time_days+safety_days) THEN
+        CASE WHEN stock_qty + in_transit_qty < daily_usage*(lead_time_days+safety_days)
+             THEN 'Reorder - Shortfall in Transit' ELSE 'Reorder - Covered by Transit' END
+      ELSE 'Healthy (OK)'
+    END
+  Meaning: Critical = below safety stock; Red Flag = won't even last the lead time (stock runs
+  out before a fresh order could arrive); Reorder band = below reorder level, split by whether
+  incoming imports cover it; Dead Stock = no usage AND no issuance in 12 months; else Healthy.
+- "CRITICAL items" specifically = status 'Critical (Below Safety Stock)' (stock_qty <
+  safety_stock). "At risk / needs ordering" = Critical + Red Flag + the two Reorder statuses.
+  Scope to one branch when a branch is named. Rows with NULL safety_days/lead_time_days can't
+  be assessed.
 - IF User query have category in it try to write sql query with strict searching of that word in category table
 
 ALIASES
