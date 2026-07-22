@@ -227,6 +227,16 @@ def inject_styles():
                 border:1px solid {T.LINE} !important; border-radius:14px !important;
                 background:{T.SURFACE} !important;
             }}
+            /* the Assistant page's chat_input pins itself to the true
+               bottom of the app (Streamlit's own documented behavior for
+               a page-level chat_input, by design here) -- but the fixed
+               bar Streamlit wraps it in is its own container with its
+               own default (light) background, not a descendant that
+               .stApp's background reaches. Left unstyled it showed as a
+               light band behind an otherwise-dark input in dark mode. */
+            [data-testid="stBottom"], [data-testid="stBottomBlockContainer"] {{
+                background:{T.CANVAS} !important;
+            }}
 
             /* ---------- body text + native widgets: mode-aware ----------
                Broad pass so text stays readable and the most common inputs
@@ -608,12 +618,22 @@ def chat_popover(on_ask, history_limit=6):
     history as the full Assistant page (st.session_state.chat), so it reads
     as one continuous assistant rather than two separate bots.
 
-    Stays presentation-only like the rest of this module: `on_ask(question)`
-    is supplied by the calling page (which already imports backend.data_access)
-    and must return {understood, answer, table}.
+    Stays presentation-only like the rest of this module: `on_ask(question,
+    history=...)` is supplied by the calling page (db.ask_assistant, the
+    real chatbot/agent.py engine as of 2026-07-22) and returns
+    {answer, dataframe, sql, error, display, chart_type}.
+
+    Deliberately simpler than the full Assistant page: no item-disambiguation
+    or date-range clarification round trip here (those are each an extra
+    sequential LLM call -- fine for a dedicated chat page, too slow for a
+    "quick question" FAB) and no table/chart rendering (380px is too narrow
+    for either) -- text answers only, one call to generate the SQL and one
+    to summarize it. `last_turn` IS shared with the Assistant page (same
+    session_state key) so a follow-up works across both surfaces.
     """
     if "chat" not in st.session_state:
         st.session_state.chat = []
+    st.session_state.setdefault("last_turn", None)
 
     avatar = qadri_avatar_svg(30)
     with st.container(key="chat_fab"):
@@ -641,11 +661,36 @@ def chat_popover(on_ask, history_limit=6):
             for turn in history:
                 with st.chat_message(turn["role"], avatar=avatar if turn["role"] == "assistant" else None):
                     st.markdown(turn["content"])
-            if prompt := st.chat_input("Message QadriBot...", key="fab_chat_input"):
+            # st.chat_input ALWAYS pins itself to the true bottom of the
+            # whole page, regardless of what container it's called from --
+            # it does not stay inside a popover panel (the panel here is
+            # only 380px wide; a chat_input placed inside it was rendering
+            # as a full-viewport-width bar at the very bottom of the
+            # underlying page instead, completely detached from the
+            # popover a person had actually opened -- confusing on every
+            # page, since it looked unconnected to the chat bubble above
+            # it). A plain form stays exactly where it's drawn, inside the
+            # popover, and still submits on Enter like chat_input did.
+            with st.form(key="fab_chat_form", clear_on_submit=True, border=False):
+                fc1, fc2 = st.columns([5, 1])
+                with fc1:
+                    prompt = st.text_input(
+                        "Message", placeholder="Message QadriBot...",
+                        label_visibility="collapsed", key="fab_chat_text",
+                    )
+                with fc2:
+                    sent = st.form_submit_button("➤", width="stretch")
+            if sent and prompt:
                 st.session_state.chat.append({"role": "user", "content": prompt})
-                result = on_ask(prompt)
-                answer = f"*I understood: {result['understood']}*\n\n{result['answer']}"
-                st.session_state.chat.append(
-                    {"role": "assistant", "content": answer, "table": result.get("table")}
-                )
+                with st.spinner("Querying the database…"):
+                    result = on_ask(prompt, history=st.session_state.last_turn)
+                if result.get("error") and not result.get("answer"):
+                    answer = f"Sorry — I couldn't answer that. Last error: {result['error']}"
+                else:
+                    answer = result.get("answer", "")
+                    if result.get("display") in ("table", "chart"):
+                        answer += "\n\n*Open the Assistant page to see this as a table/chart.*"
+                st.session_state.chat.append({"role": "assistant", "content": answer})
+                if result.get("sql"):
+                    st.session_state.last_turn = {"question": prompt, "sql": result["sql"]}
                 st.rerun()

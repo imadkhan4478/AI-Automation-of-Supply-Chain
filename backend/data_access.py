@@ -371,6 +371,30 @@ def inventory_category_list():
 
 
 # --- Imports ---------------------------------------------------------
+# Two real, defensible normalizations (checked against actual distinct
+# values, 2026-07-22) -- kept as shared SQL fragments so the main query and
+# the filter-list helpers can never drift out of sync with each other:
+#   - branch: 'QBl-II' (4 rows) vs 'QBL-II' (85 rows) is the same branch,
+#     typed with inconsistent casing -- UPPER() is an unambiguous fix, no
+#     guessing involved.
+#   - mode_of_shipment: 'Sea'/'By Sea' (287+70 rows) and 'Air'/'By Air'/
+#     'By  Air' (double-space typo; 53+7+1 rows) are the same two real
+#     modes spelled differently. NOT touched: ~13 rows where a container
+#     spec ("1 x 20' OT") was entered in this field instead -- inferring
+#     those as "Sea" would be a guess, not a normalization, so they're left
+#     exactly as they are in the source.
+def _branch_norm_sql(col):
+    return f"CASE WHEN UPPER({col}) = 'QBL-II' THEN 'QBL-II' ELSE {col} END"
+
+
+def _mode_of_shipment_norm_sql(col):
+    return f"""CASE
+            WHEN TRIM(REGEXP_REPLACE({col}, '\\s+', ' ', 'g')) IN ('Sea', 'By Sea') THEN 'Sea'
+            WHEN TRIM(REGEXP_REPLACE({col}, '\\s+', ' ', 'g')) IN ('Air', 'By Air') THEN 'Air'
+            ELSE {col}
+        END"""
+
+
 def imports(status="All", branch="All", supplier="All", customer="All", country="All", category="All",
             shipping_line="All", mode_of_shipment="All", bank="All"):
     """Real data: import shipments from import_details, enriched with the
@@ -390,11 +414,15 @@ def imports(status="All", branch="All", supplier="All", customer="All", country=
     NULL), gin_status (100% NULL) -- neither can support a real filter.
     `currency` no longer exists on payment_history (schema changed since
     it was last checked; ex_rate is what's there now).
+
+    `branch` and `mode_of_shipment` are normalized (see _branch_norm_sql() /
+    _mode_of_shipment_norm_sql() above) -- casing/spelling duplicates only,
+    never a guessed-at value.
     """
-    query = text("""
+    query = text(f"""
         SELECT
             d.import_ref,
-            d.branch,
+            {_branch_norm_sql("d.branch")} AS branch,
             d.customer,
             d.supplier,
             d.supplier_country,
@@ -409,7 +437,7 @@ def imports(status="All", branch="All", supplier="All", customer="All", country=
             sd.etd,
             sd.eta_final,
             sd.s_line AS shipping_line,
-            sd.mode_of_shipment,
+            {_mode_of_shipment_norm_sql("sd.mode_of_shipment")} AS mode_of_shipment,
             sd.clearance_mode,
             ph.bank,
             ph.payment_mode
@@ -455,7 +483,12 @@ def _imports_distinct(column):
 
 
 def imports_branch_list():
-    return _imports_distinct("branch")
+    query = text(f"""
+        SELECT DISTINCT {_branch_norm_sql("branch")} AS branch FROM public.import_details
+        WHERE branch IS NOT NULL AND branch <> '' ORDER BY 1
+    """)
+    df = pd.read_sql(query, get_engine())
+    return ["All"] + df["branch"].tolist()
 
 
 def imports_supplier_list():
@@ -471,7 +504,24 @@ def imports_country_list():
 
 
 def imports_category_list():
-    return _imports_distinct("category")
+    """Real distinct categories that appear in import_details.
+
+    'Hammad Cukurova' (3/451 rows, checked 2026-07-22) is excluded here --
+    it reads as a supplier/company name, not a category (real values are
+    Store/Engg./Sample/Capital/Refurb./Trading/Scraps), almost certainly
+    the wrong value landed in the wrong column. The raw column itself is
+    untouched -- those 3 rows are still visible in search/the full table --
+    this only stops a clearly-wrong value from being offered as something
+    to filter BY. Flagged for the business to correct at the source; not
+    guessed at or silently rewritten.
+    """
+    query = text("""
+        SELECT DISTINCT category FROM public.import_details
+        WHERE category IS NOT NULL AND category <> '' AND category <> 'Hammad Cukurova'
+        ORDER BY 1
+    """)
+    df = pd.read_sql(query, get_engine())
+    return ["All"] + df["category"].tolist()
 
 
 def imports_shipping_line_list():
@@ -484,8 +534,9 @@ def imports_shipping_line_list():
 
 
 def imports_mode_of_shipment_list():
-    query = text("""
-        SELECT DISTINCT mode_of_shipment FROM public.shipment_details
+    query = text(f"""
+        SELECT DISTINCT {_mode_of_shipment_norm_sql("mode_of_shipment")} AS mode_of_shipment
+        FROM public.shipment_details
         WHERE mode_of_shipment IS NOT NULL AND mode_of_shipment <> '' ORDER BY 1
     """)
     df = pd.read_sql(query, get_engine())
@@ -778,8 +829,23 @@ def logistics_document_types():
 
 
 # --- Assistant -------------------------------------------------------
-def ask_assistant(question):
-    return _src.ask_assistant(question)
+def ask_assistant(question, history=None):
+    """Real text-to-SQL assistant (chatbot/agent.py): LangGraph + OpenAI
+    generates a read-only SQL query against this database, runs it, and
+    summarizes the result. Was a hardcoded stub (_src.ask_assistant) until
+    2026-07-22 -- now the same engine the Assistant page uses.
+
+    `history` is the previous turn's {"question", "sql"} (or None), for
+    follow-ups like "show that as a table" / "sort by X" -- the caller owns
+    session state (this module never touches st.session_state), so it's
+    passed in rather than read here.
+
+    Returns the engine's native shape: {answer, dataframe, sql, error,
+    display, chart_type} -- see chatbot/agent.py's answer_question() for
+    what each key means.
+    """
+    from chatbot.agent import answer_question
+    return answer_question(question, history=history)
 
 
 # --- Executive / enriched (added for enterprise dashboard) -----------
