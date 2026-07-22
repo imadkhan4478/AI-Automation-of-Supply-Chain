@@ -27,27 +27,27 @@ def render():
 
     f1, f2, f3 = st.columns(3)
     with f1:
-        status = st.selectbox("Show imports", db.imports_status_list())
+        status = ui.multiselect_filter("Show imports", db.imports_status_list())
     with f2:
-        branch = st.selectbox("Works", db.imports_branch_list())
+        branch = ui.multiselect_filter("Works", db.imports_branch_list())
     with f3:
-        category = st.selectbox("Item Category", db.imports_category_list())
+        category = ui.multiselect_filter("Item Category", db.imports_category_list())
 
     with st.expander("More filters — supplier, customer, country, shipping line, mode, bank"):
         mf1, mf2, mf3 = st.columns(3)
         with mf1:
-            supplier = st.selectbox("Supplier", db.imports_supplier_list())
+            supplier = ui.multiselect_filter("Supplier", db.imports_supplier_list())
         with mf2:
-            customer = st.selectbox("Customer", db.imports_customer_list())
+            customer = ui.multiselect_filter("Customer", db.imports_customer_list())
         with mf3:
-            country = st.selectbox("Country", db.imports_country_list())
+            country = ui.multiselect_filter("Country", db.imports_country_list())
         mf4, mf5, mf6 = st.columns(3)
         with mf4:
-            shipping_line = st.selectbox("Shipping Line", db.imports_shipping_line_list())
+            shipping_line = ui.multiselect_filter("Shipping Line", db.imports_shipping_line_list())
         with mf5:
-            mode_of_shipment = st.selectbox("Mode of Shipment", db.imports_mode_of_shipment_list())
+            mode_of_shipment = ui.multiselect_filter("Mode of Shipment", db.imports_mode_of_shipment_list())
         with mf6:
-            bank = st.selectbox("Bank", db.imports_bank_list())
+            bank = ui.multiselect_filter("Bank", db.imports_bank_list())
 
     data = db.imports(
         status=status, branch=branch, supplier=supplier, customer=customer, country=country, category=category,

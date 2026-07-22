@@ -52,13 +52,13 @@ def render():
 def _render_shipments():
     f1, f2, f3, f4 = st.columns(4)
     with f1:
-        status = st.selectbox("Status", db.logistics_shipment_status_list(), key="log_ship_status")
+        status = ui.multiselect_filter("Status", db.logistics_shipment_status_list(), key="log_ship_status")
     with f2:
-        stage = st.selectbox("Shipment Stage", db.logistics_shipment_stage_list(), key="log_ship_stage")
+        stage = ui.multiselect_filter("Shipment Stage", db.logistics_shipment_stage_list(), key="log_ship_stage")
     with f3:
-        shipping_line = st.selectbox("Shipping Line", db.logistics_shipping_line_list(), key="log_ship_line")
+        shipping_line = ui.multiselect_filter("Shipping Line", db.logistics_shipping_line_list(), key="log_ship_line")
     with f4:
-        country = st.selectbox("Country", db.logistics_shipment_country_list(), key="log_ship_country")
+        country = ui.multiselect_filter("Country", db.logistics_shipment_country_list(), key="log_ship_country")
     data = db.logistics_shipments(status=status, stage=stage, shipping_line=shipping_line, country=country)
     st.write("")
 
@@ -154,13 +154,13 @@ def _render_shipments():
 def _render_packing():
     f1, f2, f3, f4 = st.columns(4)
     with f1:
-        status = st.selectbox("Status", db.logistics_packing_status_list(), key="log_pack_status")
+        status = ui.multiselect_filter("Status", db.logistics_packing_status_list(), key="log_pack_status")
     with f2:
-        works = st.selectbox("Works", db.logistics_packing_works_list(), key="log_pack_works")
+        works = ui.multiselect_filter("Works", db.logistics_packing_works_list(), key="log_pack_works")
     with f3:
-        product_category = st.selectbox("Product Category", db.logistics_packing_category_list(), key="log_pack_cat")
+        product_category = ui.multiselect_filter("Product Category", db.logistics_packing_category_list(), key="log_pack_cat")
     with f4:
-        business_type = st.selectbox("Business Type", db.logistics_packing_business_type_list(), key="log_pack_biztype")
+        business_type = ui.multiselect_filter("Business Type", db.logistics_packing_business_type_list(), key="log_pack_biztype")
     data = db.logistics_packing(status=status, works=works, product_category=product_category, business_type=business_type)
     st.write("")
 
@@ -258,11 +258,11 @@ def _render_packing():
 def _render_transport():
     f1, f2, f3 = st.columns(3)
     with f1:
-        status = st.selectbox("Status", db.logistics_shifting_status_list(), key="log_shift_status")
+        status = ui.multiselect_filter("Status", db.logistics_shifting_status_list(), key="log_shift_status")
     with f2:
-        movement_type = st.selectbox("Movement Type", db.logistics_movement_type_list(), key="log_shift_movetype")
+        movement_type = ui.multiselect_filter("Movement Type", db.logistics_movement_type_list(), key="log_shift_movetype")
     with f3:
-        payment_status = st.selectbox("Payment Status", db.logistics_payment_status_list(), key="log_shift_paystatus")
+        payment_status = ui.multiselect_filter("Payment Status", db.logistics_payment_status_list(), key="log_shift_paystatus")
     data = db.logistics_shifting(status=status, movement_type=movement_type, payment_status=payment_status)
     st.write("")
 
@@ -355,7 +355,7 @@ def _render_transport():
 #  DOCUMENTATION  (v_documentation_completion + export_documents)
 # ======================================================================
 def _render_documentation():
-    status = st.selectbox("Status", db.logistics_documentation_status_list(), key="log_doc_status")
+    status = ui.multiselect_filter("Status", db.logistics_documentation_status_list(), key="log_doc_status")
     data = db.logistics_documentation(status=status)
     st.write("")
 

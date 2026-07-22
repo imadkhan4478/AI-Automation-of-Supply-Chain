@@ -21,6 +21,23 @@ from sqlalchemy import text
 from backend.db_connection import get_engine
 
 
+def _filtered(df, col, value):
+    """Apply one filter value to df[col] -- value can be 'All'/None (no
+    filter), a single value (equality, kept for any leftover single-select
+    call sites), or a list/tuple/set (multi-select: isin()). Every page
+    filter now goes through this so a filter widget can offer "pick more
+    than one branch/supplier/etc." without each of the ~30 filter sites
+    below needing its own list-handling logic.
+    """
+    if value is None or value == "All":
+        return df
+    if isinstance(value, (list, tuple, set)):
+        if not value:
+            return df
+        return df[df[col].isin(value)].reset_index(drop=True)
+    return df[df[col] == value].reset_index(drop=True)
+
+
 # --- Dashboard -------------------------------------------------------
 def dashboard_kpis():
     return _src.get_dashboard_kpis()
@@ -113,7 +130,7 @@ def alerts():
 
 
 # --- Purchases -------------------------------------------------------
-def purchases(status="All", supplier="All", branch="All", category="All"):
+def purchases(status="All", supplier="All", branch="All", category="All", mop="All", sourcing_officer="All"):
     """Real data: purchase orders joined to item names + category/material
     (from `items`), with a derived status.
 
@@ -129,12 +146,17 @@ def purchases(status="All", supplier="All", branch="All", category="All"):
     `material` (items.material_standard) is real but sparse (~33% of rows)
     -- returned as a column for search/table, not offered as its own filter
     dropdown since two-thirds of rows would just show as unmatched.
+
+    `item_code` (2026-07-22): added so the Reports builder can join
+    Purchases to Inventory (`stock()` already returns item_code) -- the two
+    are the only sources sharing a real item-level key.
     """
     query = text("""
         SELECT
             p.ref_no,
             p.po_number,
             p.supplier,
+            p.item_code,
             COALESCE(i.item, p.item_code) AS item,
             p.branch,
             i.item_category,
@@ -159,14 +181,12 @@ def purchases(status="All", supplier="All", branch="All", category="All"):
     """)
     df = pd.read_sql(query, get_engine())
 
-    if status != "All":
-        df = df[df["status"] == status].reset_index(drop=True)
-    if supplier != "All":
-        df = df[df["supplier"] == supplier].reset_index(drop=True)
-    if branch != "All":
-        df = df[df["branch"] == branch].reset_index(drop=True)
-    if category != "All":
-        df = df[df["item_category"] == category].reset_index(drop=True)
+    df = _filtered(df, "status", status)
+    df = _filtered(df, "supplier", supplier)
+    df = _filtered(df, "branch", branch)
+    df = _filtered(df, "item_category", category)
+    df = _filtered(df, "mop", mop)
+    df = _filtered(df, "sourcing_officer", sourcing_officer)
     return df
 
 
@@ -324,12 +344,9 @@ def stock(status="All", category="All", branch="All"):
 
     df["stock_status"] = df.apply(_status, axis=1)
 
-    if status != "All":
-        df = df[df["stock_status"] == status].reset_index(drop=True)
-    if category != "All":
-        df = df[df["item_category"] == category].reset_index(drop=True)
-    if branch != "All":
-        df = df[df["branch"] == branch].reset_index(drop=True)
+    df = _filtered(df, "stock_status", status)
+    df = _filtered(df, "item_category", category)
+    df = _filtered(df, "branch", branch)
     return df
 
 
@@ -403,24 +420,15 @@ def imports(status="All", branch="All", supplier="All", customer="All", country=
     """)
     df = pd.read_sql(query, get_engine())
 
-    if status != "All":
-        df = df[df["current_status"] == status].reset_index(drop=True)
-    if branch != "All":
-        df = df[df["branch"] == branch].reset_index(drop=True)
-    if supplier != "All":
-        df = df[df["supplier"] == supplier].reset_index(drop=True)
-    if customer != "All":
-        df = df[df["customer"] == customer].reset_index(drop=True)
-    if country != "All":
-        df = df[df["supplier_country"] == country].reset_index(drop=True)
-    if category != "All":
-        df = df[df["category"] == category].reset_index(drop=True)
-    if shipping_line != "All":
-        df = df[df["shipping_line"] == shipping_line].reset_index(drop=True)
-    if mode_of_shipment != "All":
-        df = df[df["mode_of_shipment"] == mode_of_shipment].reset_index(drop=True)
-    if bank != "All":
-        df = df[df["bank"] == bank].reset_index(drop=True)
+    df = _filtered(df, "current_status", status)
+    df = _filtered(df, "branch", branch)
+    df = _filtered(df, "supplier", supplier)
+    df = _filtered(df, "customer", customer)
+    df = _filtered(df, "supplier_country", country)
+    df = _filtered(df, "category", category)
+    df = _filtered(df, "shipping_line", shipping_line)
+    df = _filtered(df, "mode_of_shipment", mode_of_shipment)
+    df = _filtered(df, "bank", bank)
     return df
 
 
@@ -548,14 +556,10 @@ def logistics_shipments(status="All", stage="All", shipping_line="All", country=
         ORDER BY es.shipment_id DESC
     """)
     df = pd.read_sql(query, get_engine())
-    if status != "All":
-        df = df[df["status"] == status].reset_index(drop=True)
-    if stage != "All":
-        df = df[df["shipment_stage"] == stage].reset_index(drop=True)
-    if shipping_line != "All":
-        df = df[df["s_line"] == shipping_line].reset_index(drop=True)
-    if country != "All":
-        df = df[df["country"] == country].reset_index(drop=True)
+    df = _filtered(df, "status", status)
+    df = _filtered(df, "shipment_stage", stage)
+    df = _filtered(df, "s_line", shipping_line)
+    df = _filtered(df, "country", country)
     return df
 
 
@@ -619,14 +623,10 @@ def logistics_packing(status="All", works="All", product_category="All", busines
     """)
     df = pd.read_sql(query, get_engine())
     df["rfd_delay_days"] = (pd.to_datetime(df["actual_rfd_date"]) - pd.to_datetime(df["target_rfd"])).dt.days
-    if status != "All":
-        df = df[df["status"] == status].reset_index(drop=True)
-    if works != "All":
-        df = df[df["works"] == works].reset_index(drop=True)
-    if product_category != "All":
-        df = df[df["product_category"] == product_category].reset_index(drop=True)
-    if business_type != "All":
-        df = df[df["business_type"] == business_type].reset_index(drop=True)
+    df = _filtered(df, "status", status)
+    df = _filtered(df, "works", works)
+    df = _filtered(df, "product_category", product_category)
+    df = _filtered(df, "business_type", business_type)
     return df
 
 
@@ -691,12 +691,9 @@ def logistics_shifting(status="All", movement_type="All", payment_status="All"):
         ORDER BY s.shifting_id DESC
     """)
     df = pd.read_sql(query, get_engine())
-    if status != "All":
-        df = df[df["status"] == status].reset_index(drop=True)
-    if movement_type != "All":
-        df = df[df["movement_type"] == movement_type].reset_index(drop=True)
-    if payment_status != "All":
-        df = df[df["payment_status"] == payment_status].reset_index(drop=True)
+    df = _filtered(df, "status", status)
+    df = _filtered(df, "movement_type", movement_type)
+    df = _filtered(df, "payment_status", payment_status)
     return df
 
 
@@ -756,8 +753,7 @@ def logistics_documentation(status="All"):
         return "Incomplete"
 
     df["status"] = df["completion_pct"].apply(_doc_status)
-    if status != "All":
-        df = df[df["status"] == status].reset_index(drop=True)
+    df = _filtered(df, "status", status)
     return df
 
 

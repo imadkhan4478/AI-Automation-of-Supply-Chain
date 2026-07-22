@@ -10,6 +10,7 @@ real today -- no stubbed downloads.
 
 import datetime
 import io
+import itertools
 
 import streamlit as st
 import pandas as pd
@@ -44,6 +45,54 @@ SOURCES = {
     "Logistics — Export Documentation": {"loader": lambda: db.logistics_documentation(), "status_col": "status", "date_col": None},
 }
 
+# Which source PAIRS share a real key to join on -- not a guess, checked
+# against what each loader actually returns:
+#   - Purchases + Inventory: both item-level, both now return item_code
+#     (purchases() didn't expose it until 2026-07-22; stock() always did).
+#   - The four Logistics sources: all key off export_id (export_shipments,
+#     packing_details, shifting_movements, v_documentation_completion all
+#     carry it), so any combination of them can be joined.
+# Any other combination (e.g. Purchases + Imports, Imports + Logistics) has
+# no shared column in this schema -- those are shown as separate sections
+# rather than forced into a meaningless join.
+_LOGISTICS_SOURCES = [
+    "Logistics — Export Shipments", "Logistics — Packing",
+    "Logistics — Transport", "Logistics — Export Documentation",
+]
+_JOIN_KEYS = {frozenset({"Purchases", "Inventory"}): "item_code"}
+for _a, _b in itertools.combinations(_LOGISTICS_SOURCES, 2):
+    _JOIN_KEYS[frozenset({_a, _b})] = "export_id"
+
+
+def _group_by_relation(sources):
+    """Partition selected sources into clusters that share a join key
+    (transitively -- picking all 4 Logistics sources joins them all into
+    one cluster since they share export_id pairwise). A source with no
+    relation to anything else picked comes back as its own single-item
+    cluster.
+    """
+    parent = {s: s for s in sources}
+
+    def find(x):
+        while parent[x] != x:
+            x = parent[x]
+        return x
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[ra] = rb
+
+    for a, b in itertools.combinations(sources, 2):
+        if frozenset({a, b}) in _JOIN_KEYS:
+            union(a, b)
+
+    groups = {}
+    for s in sources:
+        groups.setdefault(find(s), []).append(s)
+    return list(groups.values())
+
+
 _AGG_FUNCS = {"Sum": "sum", "Average": "mean", "Count": "count"}
 
 
@@ -68,10 +117,110 @@ def render():
     ui.page_header("Reports", "Build a custom report from any columns, then export or visualize", module="reports")
     ui.chat_popover(db.ask_assistant)
 
-    # -------------------------------------------------- 1. Source
-    ui.section("1 · Choose a data source")
-    source = st.selectbox("Data source", list(SOURCES.keys()), label_visibility="collapsed")
+    # -------------------------------------------------- 1. Source(s)
+    ui.section("1 · Choose data source(s)")
+    sources = st.multiselect(
+        "Data source(s)", list(SOURCES.keys()), default=[], label_visibility="collapsed",
+        help="Pick one source for the full report builder below. Pick more than one and "
+             "sources that share a real key are joined into a single combined report "
+             "(Purchases+Inventory on item_code; any of the four Logistics sources on "
+             "export_id) -- anything else is shown as its own section, not force-merged.",
+    )
+    if not sources:
+        st.info("Choose at least one data source to begin.")
+        return
 
+    if len(sources) == 1:
+        _render_single(sources[0])
+        return
+
+    clusters = _group_by_relation(sources)
+    st.write("")
+    for cluster in clusters:
+        if len(cluster) > 1:
+            _render_joined(cluster)
+        else:
+            ui.section(f"— {cluster[0]} —")
+            _render_single(cluster[0])
+        st.divider()
+
+
+def _render_joined(cluster):
+    """Render sources that share a real key as ONE combined report --
+    inner-joined, so only rows present in every selected source appear.
+    Deliberately simpler than the single-source wizard (columns + preview
+    + export only, no quick/advanced filters or compare) -- combined
+    filtering across sources with different row grains is a bigger feature
+    than this first pass covers; column-level filtering can be added if
+    it turns out to be needed once people are using the join itself.
+    """
+    join_key = _JOIN_KEYS[frozenset(cluster[:2])]
+    ui.section(f"— {'  +  '.join(cluster)}  (joined on {join_key}) —")
+
+    frames = []
+    for s in cluster:
+        d = SOURCES[s]["loader"]()
+        if join_key not in d.columns:
+            st.warning(f"{s} has no {join_key} to join on in the current data -- showing it separately below.")
+            _render_single(s)
+            continue
+        # export_id/item_code come back as different dtypes across sources
+        # (float64 wherever the column has NULLs, object/int elsewhere) --
+        # pandas' merge refuses to join across dtypes. Normalizing through
+        # nullable Int64 makes "123" and "123.0" compare equal; rows with no
+        # key at all are dropped rather than kept, since two NULLs joining
+        # to each other would be a fake match, not a real relation.
+        d = d.dropna(subset=[join_key]).copy()
+        d[join_key] = pd.to_numeric(d[join_key], errors="coerce").astype("Int64")
+        d = d.dropna(subset=[join_key])
+        short = s.split(" — ")[-1] if " — " in s else s
+        d = d.rename(columns={c: f"{short}: {c}" for c in d.columns if c != join_key})
+        frames.append(d)
+
+    if len(frames) < 2:
+        return
+
+    merged = frames[0]
+    for d in frames[1:]:
+        merged = merged.merge(d, on=join_key, how="inner")
+
+    if merged.empty:
+        st.info(f"No rows share the same {join_key} across every selected source in the current data.")
+        return
+
+    cluster_key = "_".join(cluster)
+    all_cols = list(merged.columns)
+    chosen_cols = st.multiselect(
+        "Columns", all_cols, default=all_cols[: min(8, len(all_cols))],
+        key=f"joined_columns_{cluster_key}",
+    )
+    if not chosen_cols:
+        st.info("Select at least one column to build this combined report.")
+        return
+    result = merged[chosen_cols]
+
+    st.caption(f"{len(result):,} joined rows (only {join_key} values present in every selected source).")
+    ui.styled_table(result, height=340)
+
+    st.write("")
+    slug = cluster_key.lower().replace(" — ", "_").replace(" ", "_")
+    e1, e2 = st.columns(2)
+    with e1:
+        st.download_button(
+            "⬇  Export CSV", result.to_csv(index=False).encode("utf-8"),
+            file_name=f"{slug}_joined.csv", mime="text/csv", width="stretch",
+            key=f"csv_joined_{cluster_key}",
+        )
+    with e2:
+        st.download_button(
+            "⬇  Export Excel", _to_excel_bytes(result),
+            file_name=f"{slug}_joined.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", width="stretch",
+            key=f"xlsx_joined_{cluster_key}",
+        )
+
+
+def _render_single(source):
     full = SOURCES[source]["loader"]()
     status_col = SOURCES[source]["status_col"]
     date_col = SOURCES[source]["date_col"]

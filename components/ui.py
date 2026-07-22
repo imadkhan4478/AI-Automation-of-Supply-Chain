@@ -248,6 +248,25 @@ def inject_styles():
             [data-testid="stMultiSelect"] div[data-baseweb="select"] > div {{
                 background:{T.SURFACE} !important; color:{T.INK} !important; border-color:{T.LINE} !important;
             }}
+            /* selectbox/multiselect OPTIONS popup -- BaseWeb renders this in
+               a portal, so it never inherits the app's own dark background
+               and stayed white-on-dark (the "light dropdown in dark mode"
+               bug) until styled explicitly here. */
+            div[data-baseweb="popover"] div[data-baseweb="menu"],
+            div[data-baseweb="popover"] ul[role="listbox"] {{
+                background:{T.SURFACE} !important;
+            }}
+            div[data-baseweb="popover"] li[role="option"],
+            div[data-baseweb="popover"] li {{
+                background:{T.SURFACE} !important; color:{T.INK} !important;
+            }}
+            div[data-baseweb="popover"] li[role="option"]:hover,
+            div[data-baseweb="popover"] li[aria-selected="true"] {{
+                background:{T.CANVAS_ALT} !important;
+            }}
+            [data-testid="stMultiSelect"] span[data-baseweb="tag"] {{
+                background:{T.BRAND} !important; color:#FFFFFF !important;
+            }}
             [data-testid="stExpander"] {{
                 background:{T.SURFACE} !important; border:1px solid {T.LINE} !important; border-radius:12px !important;
             }}
@@ -288,6 +307,17 @@ def inject_styles():
 # ======================================================================
 #  HEADER  (restrained white banner, module accent shows up only in the badge)
 # ======================================================================
+def multiselect_filter(label, options, key=None):
+    """Multi-value filter dropdown: `options` is the ["All", ...] list every
+    db.*_list() helper returns. "All" is dropped since an empty selection
+    already means "no filter" for a multiselect -- matches how
+    backend._filtered() treats an empty list (return every row). A person
+    can still pick exactly one value; they're just no longer limited to one.
+    """
+    values = [o for o in options if o != "All"]
+    return st.multiselect(label, values, placeholder="All", key=key, label_visibility="visible")
+
+
 def page_header(title, subtitle="", module="dashboard"):
     accent, soft = T.module_colors(module)
     icon_path = T.MODULE_ICONS.get(module, T.MODULE_ICONS["dashboard"])

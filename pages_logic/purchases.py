@@ -18,26 +18,23 @@ def render():
 
     f1, f2, f3, f4 = st.columns(4)
     with f1:
-        status = st.selectbox("Show orders", db.purchase_status_list())
+        status = ui.multiselect_filter("Show orders", db.purchase_status_list())
     with f2:
-        supplier = st.selectbox("Supplier", db.supplier_list())
+        supplier = ui.multiselect_filter("Supplier", db.supplier_list())
     with f3:
-        branch = st.selectbox("Branch", db.purchases_branch_list())
+        branch = ui.multiselect_filter("Branch", db.purchases_branch_list())
     with f4:
-        category = st.selectbox("Item Category", db.purchases_category_list())
+        category = ui.multiselect_filter("Item Category", db.purchases_category_list())
 
     with st.expander("More filters — MOP, sourcing officer"):
         mf1, mf2 = st.columns(2)
         with mf1:
-            mop = st.selectbox("Mode of Purchase (MOP)", db.purchases_mop_list())
+            mop = ui.multiselect_filter("Mode of Purchase (MOP)", db.purchases_mop_list())
         with mf2:
-            sourcing_officer = st.selectbox("Sourcing Officer", db.purchases_sourcing_officer_list())
+            sourcing_officer = ui.multiselect_filter("Sourcing Officer", db.purchases_sourcing_officer_list())
 
-    data = db.purchases(status=status, supplier=supplier, branch=branch, category=category)
-    if mop != "All":
-        data = data[data["mop"] == mop].reset_index(drop=True)
-    if sourcing_officer != "All":
-        data = data[data["sourcing_officer"] == sourcing_officer].reset_index(drop=True)
+    data = db.purchases(status=status, supplier=supplier, branch=branch, category=category,
+                         mop=mop, sourcing_officer=sourcing_officer)
     st.write("")
 
     # -------------------------------------------------- KPIs

@@ -125,8 +125,15 @@ _DARK = dict(
     NAVY="#F1F3F9", NAVY_DEEP="#0B0E14", GOLD_SOFT="#8A6D2A", BRAND_SOFT="#241F3D",
     INK="#F1F3F9", MUTED="#9AA3B8", LINE="#2A2E3D",
     SURFACE="#171A24", CANVAS="#0E1017", CANVAS_ALT="#1D202C", SIDEBAR_BG="#12141C",
-    RISK="#F27E71", RISK_BG="#3A1E1E", WATCH="#E8AE4D", WATCH_BG="#3A2E14",
-    HEALTHY="#4ADE80", HEALTHY_BG="#173A26", INFO="#7CA6F0", INFO_BG="#1A2C4A",
+    # Row/badge backgrounds, dark mode (2026-07-22): the old values (e.g.
+    # WATCH_BG #3A2E14) were saturated enough to read as a solid brown/red/
+    # green block filling a whole table row -- glaring against the app's
+    # own near-black surfaces (#171A24/#0E1017). These are low-chroma,
+    # close to that same darkness, with just enough hue to signal status --
+    # a tint, not a wash. Foreground R/A/G colors are unchanged (already
+    # used sparingly, as text/icon accents, not full fills).
+    RISK="#F27E71", RISK_BG="#2A1D1D", WATCH="#E8AE4D", WATCH_BG="#2A2418",
+    HEALTHY="#4ADE80", HEALTHY_BG="#1A2A21", INFO="#7CA6F0", INFO_BG="#1B2436",
 )
 
 DARK_MODE = False

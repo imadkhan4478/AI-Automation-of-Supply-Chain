@@ -25,6 +25,14 @@ branch/qty. Category and Branch (4 real branches) are their own filters
 alongside status. hold_qty is now pulled in too (was never selected
 before) and shown as its own KPI -- reserved stock, not available for use,
 distinct from available_qty/stock_qty.
+
+Search, surfaced (2026-07-21): the search box used to live inside the
+collapsed "View real data" expander, where it only filtered the table --
+easy to miss, and left the KPIs/charts above showing the unsearched set.
+It's now its own always-visible row right under the filters, and it
+filters `data` itself before anything downstream (KPIs, charts, table)
+is computed -- so searching "steel" narrows the whole page, not just the
+table at the bottom.
 """
 
 import streamlit as st
@@ -41,12 +49,27 @@ def render():
 
     f1, f2, f3 = st.columns(3)
     with f1:
-        status = st.selectbox("Show items", ["All", "Out of Stock", "Below Reorder", "OK"])
+        status = ui.multiselect_filter("Show items", ["All", "Out of Stock", "Below Reorder", "OK"])
     with f2:
-        category = st.selectbox("Category", db.inventory_category_list())
+        category = ui.multiselect_filter("Category", db.inventory_category_list())
     with f3:
-        branch = st.selectbox("Branch", db.inventory_branch_list())
+        branch = ui.multiselect_filter("Branch", db.inventory_branch_list())
     data = db.stock(status=status, category=category, branch=branch)
+
+    search = st.text_input(
+        "Search",
+        placeholder="🔍 Search by item, item code, branch, category, or specs...",
+        label_visibility="collapsed",
+    )
+    if search:
+        needle = search.lower()
+        mask = data.apply(
+            lambda r: needle in str(r["item"]).lower() or needle in str(r["item_code"]).lower()
+            or needle in str(r["branch"]).lower() or needle in str(r["item_category"]).lower()
+            or needle in str(r["specs"]).lower(),
+            axis=1,
+        )
+        data = data[mask].reset_index(drop=True)
     st.write("")
 
     # -------------------------------------------------- KPIs
@@ -128,19 +151,5 @@ def render():
     st.write("")
 
     # -------------------------------------------------- Real data, on demand
-    with st.expander("🔍 View real data / search"):
-        search = st.text_input(
-            "Search", placeholder="Search by item, item code, branch, category, or specs.",
-            label_visibility="collapsed",
-        )
-        table_data = data
-        if search:
-            needle = search.lower()
-            mask = data.apply(
-                lambda r: needle in str(r["item"]).lower() or needle in str(r["item_code"]).lower()
-                or needle in str(r["branch"]).lower() or needle in str(r["item_category"]).lower()
-                or needle in str(r["specs"]).lower(),
-                axis=1,
-            )
-            table_data = data[mask]
-        ui.styled_table(table_data, status_col="stock_status", height=380)
+    with st.expander("🔍 View real data"):
+        ui.styled_table(data, status_col="stock_status", height=380)
